@@ -44,7 +44,7 @@ RUN mkdir -p /tmp/costguard
 RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app /tmp/costguard
 USER appuser
 
-EXPOSE 8000 8501
+EXPOSE 8501
 
 # Health check — Railway/Render hit the public Streamlit port
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \

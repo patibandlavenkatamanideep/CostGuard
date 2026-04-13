@@ -1,58 +1,44 @@
 #!/usr/bin/env bash
 # CostGuard — single-container startup (Railway / Render)
 #
-# Railway/Render expose exactly ONE public port ($PORT).
-# Strategy:
-#   1. Start FastAPI (uvicorn) on localhost:8000 in the background.
-#   2. Start Streamlit on $PORT in the background immediately (no wait).
-#      The Streamlit UI imports evaluation.engine directly — it does NOT
-#      depend on the FastAPI process being alive.
-#   3. Wait for either process to exit — exit with its code.
+# Railway injects $PORT for the public-facing port.
+# Streamlit binds to $PORT.  FastAPI binds to a FIXED internal port (9000)
+# so it can never clash with whatever value Railway assigns to $PORT.
 #
-# NOTE: We used to block Streamlit on FastAPI health, but that caused
-# Railway healthchecks (/_stcore/health) to time out if uvicorn was slow
-# to start. Now both launch in parallel so Railway can probe Streamlit
-# as soon as it's up.
+# Startup order:
+#   1. Python import check — fail fast with a useful error in deploy logs
+#   2. FastAPI on 127.0.0.1:9000 in the background
+#   3. exec Streamlit on $PORT — becomes the foreground process Railway monitors
 
 set -euo pipefail
 
 PUBLIC_PORT="${PORT:-8501}"
-API_PORT="${API_PORT:-8000}"
-
-echo "[start.sh] Launching CostGuard..."
-echo "[start.sh]   FastAPI   → http://localhost:${API_PORT} (internal)"
-echo "[start.sh]   Streamlit → http://0.0.0.0:${PUBLIC_PORT} (public)"
-
+API_PORT="9000"          # fixed internal port; never equals $PORT
 export API_BASE_URL="http://localhost:${API_PORT}"
 
-# ── 1. Start FastAPI in the background ──────────────────────────────────────
+echo "[start.sh] Python: $(python3 --version)"
+echo "[start.sh] Streamlit → 0.0.0.0:${PUBLIC_PORT}  |  FastAPI → 127.0.0.1:${API_PORT}"
+
+# ── 1. Fail-fast import check (output visible in Railway Deploy Logs) ─────────
+echo "[start.sh] Checking imports..."
+python3 -c "
+from backend.config import get_settings
+from backend.models import EvalMode, SessionKeys
+from evaluation.engine import run_evaluation
+print('[start.sh] All imports OK')
+"
+
+# ── 2. FastAPI in the background — Streamlit does NOT depend on it ────────────
 uvicorn backend.main:app \
   --host 127.0.0.1 \
   --port "${API_PORT}" \
   --log-level "${LOG_LEVEL:-info}" &
-UVICORN_PID=$!
-echo "[start.sh] uvicorn PID=${UVICORN_PID}"
 
-# ── 2. Start Streamlit immediately (parallel to FastAPI) ─────────────────────
-streamlit run frontend/app.py \
+# ── 3. Streamlit in the foreground — this is what Railway health-checks ───────
+exec streamlit run frontend/app.py \
   --server.port "${PUBLIC_PORT}" \
   --server.address "0.0.0.0" \
   --server.headless true \
   --server.enableCORS false \
   --server.enableXsrfProtection false \
-  --browser.gatherUsageStats false &
-STREAMLIT_PID=$!
-echo "[start.sh] streamlit PID=${STREAMLIT_PID}"
-
-# ── 3. Cleanup handler — kill both on exit ───────────────────────────────────
-cleanup() {
-  echo "[start.sh] Shutting down..."
-  kill "${UVICORN_PID}" "${STREAMLIT_PID}" 2>/dev/null || true
-}
-trap cleanup EXIT INT TERM
-
-# ── 4. Wait for either process to exit ──────────────────────────────────────
-wait -n "${UVICORN_PID}" "${STREAMLIT_PID}"
-EXIT_CODE=$?
-echo "[start.sh] A child process exited (code=${EXIT_CODE}). Shutting down."
-exit "${EXIT_CODE}"
+  --browser.gatherUsageStats false

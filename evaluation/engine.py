@@ -71,12 +71,11 @@ try:
 
     RDAB_AVAILABLE = True
     logger.info("RealDataAgentBench package loaded successfully")
-except ImportError as _rdab_err:
+except Exception as _rdab_err:
     RDAB_AVAILABLE = False
     logger.warning(
-        f"RealDataAgentBench not installed ({_rdab_err}). "
-        "All models will use simulation mode. "
-        "Install with: pip install git+https://github.com/patibandlavenkatamanideep/RealDataAgentBench.git"
+        f"RealDataAgentBench unavailable ({type(_rdab_err).__name__}: {_rdab_err}). "
+        "All models will use simulation mode."
     )
 
 
