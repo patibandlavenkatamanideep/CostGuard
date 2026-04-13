@@ -11,6 +11,6 @@
     "restartPolicyMaxRetries": 3,
     "startCommand": "bash scripts/start.sh",
     "healthcheckPath": "/_stcore/health",
-    "healthcheckTimeout": 60
+    "healthcheckTimeout": 300
   }
 }

@@ -30,7 +30,7 @@ echo "[start.sh] uvicorn PID=${UVICORN_PID}"
 # ── 2. Wait until FastAPI is healthy (fail hard after 60 s) ──────────────────
 echo "[start.sh] Waiting for FastAPI /health..."
 READY=0
-for i in $(seq 1 60); do
+for i in $(seq 1 30); do
   if curl -sf "http://localhost:${API_PORT}/health" > /dev/null 2>&1; then
     echo "[start.sh] FastAPI healthy after ${i}s"
     READY=1
@@ -45,7 +45,7 @@ for i in $(seq 1 60); do
 done
 
 if [ "${READY}" -eq 0 ]; then
-  echo "[start.sh] ERROR: FastAPI did not become healthy within 60 s" >&2
+  echo "[start.sh] ERROR: FastAPI did not become healthy within 30 s" >&2
   kill "${UVICORN_PID}" 2>/dev/null || true
   exit 1
 fi
