@@ -4,9 +4,15 @@
 # Railway/Render expose exactly ONE public port ($PORT).
 # Strategy:
 #   1. Start FastAPI (uvicorn) on localhost:8000 in the background.
-#   2. Wait until FastAPI is healthy (fail hard if it never starts).
-#   3. Start Streamlit on $PORT in the background.
-#   4. Wait for either process to exit — exit with its code.
+#   2. Start Streamlit on $PORT in the background immediately (no wait).
+#      The Streamlit UI imports evaluation.engine directly — it does NOT
+#      depend on the FastAPI process being alive.
+#   3. Wait for either process to exit — exit with its code.
+#
+# NOTE: We used to block Streamlit on FastAPI health, but that caused
+# Railway healthchecks (/_stcore/health) to time out if uvicorn was slow
+# to start. Now both launch in parallel so Railway can probe Streamlit
+# as soon as it's up.
 
 set -euo pipefail
 
@@ -27,33 +33,7 @@ uvicorn backend.main:app \
 UVICORN_PID=$!
 echo "[start.sh] uvicorn PID=${UVICORN_PID}"
 
-# ── 2. Wait until FastAPI is healthy (fail hard after 60 s) ──────────────────
-echo "[start.sh] Waiting for FastAPI /health..."
-READY=0
-for i in $(seq 1 30); do
-  if curl -sf "http://localhost:${API_PORT}/health" > /dev/null 2>&1; then
-    echo "[start.sh] FastAPI healthy after ${i}s"
-    READY=1
-    break
-  fi
-  # Bail early if uvicorn already died
-  if ! kill -0 "${UVICORN_PID}" 2>/dev/null; then
-    echo "[start.sh] ERROR: uvicorn exited unexpectedly" >&2
-    exit 1
-  fi
-  sleep 1
-done
-
-if [ "${READY}" -eq 0 ]; then
-  echo "[start.sh] ERROR: FastAPI did not become healthy within 30 s" >&2
-  kill "${UVICORN_PID}" 2>/dev/null || true
-  exit 1
-fi
-
-# ── 3. Start Streamlit in the background ────────────────────────────────────
-# NOTE: Do NOT use 'exec' here — that would orphan uvicorn in some container
-# runtimes. Run both as background children of this script so they share the
-# same process group and are cleaned up together.
+# ── 2. Start Streamlit immediately (parallel to FastAPI) ─────────────────────
 streamlit run frontend/app.py \
   --server.port "${PUBLIC_PORT}" \
   --server.address "0.0.0.0" \
@@ -64,15 +44,14 @@ streamlit run frontend/app.py \
 STREAMLIT_PID=$!
 echo "[start.sh] streamlit PID=${STREAMLIT_PID}"
 
-# ── 4. Cleanup handler — kill both on exit ───────────────────────────────────
+# ── 3. Cleanup handler — kill both on exit ───────────────────────────────────
 cleanup() {
   echo "[start.sh] Shutting down..."
   kill "${UVICORN_PID}" "${STREAMLIT_PID}" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-# ── 5. Wait for either process to exit ──────────────────────────────────────
-# Re-export PIDs so wait -n works (bash 4.3+ — Debian/Ubuntu default)
+# ── 4. Wait for either process to exit ──────────────────────────────────────
 wait -n "${UVICORN_PID}" "${STREAMLIT_PID}"
 EXIT_CODE=$?
 echo "[start.sh] A child process exited (code=${EXIT_CODE}). Shutting down."
