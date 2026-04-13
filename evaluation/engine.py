@@ -553,16 +553,25 @@ def _build_recommendation_reason(
     ranked: list[ModelResult],
     eval_mode: EvalMode,
 ) -> str:
-    """Generate a human-readable RDAB-informed recommendation."""
+    """Generate a human-readable RDAB-informed recommendation (HTML lines)."""
     sc = best.rdab_scorecard
-    mode_note = " *(simulated scores — add API keys for live benchmarking)*" if eval_mode == EvalMode.SIMULATION else " *(live RDAB benchmark)*"
+    mode_note = (
+        "Simulated scores — add API keys for live benchmarking"
+        if eval_mode == EvalMode.SIMULATION
+        else "Live RDAB benchmark"
+    )
 
     lines = [
-        f"**{best.display_name}** achieves the best balance of RDAB score and cost for your data{mode_note}.",
-        f"RDAB composite score: **{sc.rdab_score:.1%}** "
-        f"(correctness {sc.correctness:.0%} · code quality {sc.code_quality:.0%} · "
-        f"efficiency {sc.efficiency:.0%} · stat validity {sc.stat_validity:.0%}).",
-        f"Estimated cost: **${best.estimated_total_cost_usd:.5f} per run**.",
+        f"{best.display_name} achieves the best balance of RDAB score and cost for your data.",
+        f"Mode: {mode_note}",
+        (
+            f"RDAB Score: {sc.rdab_score:.1%}"
+            f"  —  Correctness {sc.correctness:.0%}"
+            f"  ·  Code Quality {sc.code_quality:.0%}"
+            f"  ·  Efficiency {sc.efficiency:.0%}"
+            f"  ·  Stat Validity {sc.stat_validity:.0%}"
+        ),
+        f"Estimated cost: ${best.estimated_total_cost_usd:.5f} per run",
     ]
 
     runner_up = ranked[1] if len(ranked) > 1 else None
@@ -570,9 +579,9 @@ def _build_recommendation_reason(
         saving = runner_up.estimated_total_cost_usd - best.estimated_total_cost_usd
         if saving > 0:
             lines.append(
-                f"Saves **${saving:.5f}** per run vs "
-                f"{runner_up.display_name} ({runner_up.rdab_scorecard.rdab_score:.1%} RDAB)."
+                f"Saves ${saving:.5f} per run vs "
+                f"{runner_up.display_name} ({runner_up.rdab_scorecard.rdab_score:.1%} RDAB)"
             )
 
-    lines.append(f"Key strengths: {', '.join(best.strengths[:2])}.")
-    return " ".join(lines)
+    lines.append(f"Strengths: {', '.join(best.strengths[:2])}")
+    return "<br>".join(lines)

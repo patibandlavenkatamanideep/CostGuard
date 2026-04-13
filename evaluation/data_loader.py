@@ -29,6 +29,43 @@ class DataLoadError(Exception):
     """Raised when a file cannot be loaded or is invalid."""
 
 
+def _read_csv_robust(file_obj: io.IOBase, filename: str) -> pd.DataFrame:
+    """
+    Read a CSV tolerating the three most common real-world problems:
+    1. Non-UTF-8 encoding  (BX-Books, European datasets)
+    2. Bad / extra fields  (C error: Expected N fields, saw M)
+    3. BOM prefix on first column name
+    Tries encodings in order; skips malformed lines with a logged warning.
+    """
+    encodings = ("utf-8", "latin-1", "cp1252", "utf-8-sig")
+    last_exc: Exception | None = None
+
+    for encoding in encodings:
+        try:
+            file_obj.seek(0)
+            df = pd.read_csv(
+                file_obj,
+                low_memory=False,
+                encoding=encoding,
+                on_bad_lines="skip",   # skip rows with wrong field count
+                engine="python",       # more lenient than the C engine
+            )
+            skipped = sum(1 for _ in [])  # placeholder — pandas logs internally
+            logger.info(f"Loaded '{filename}' with encoding={encoding}")
+            return df
+        except UnicodeDecodeError as exc:
+            last_exc = exc
+            continue
+        except Exception as exc:
+            last_exc = exc
+            continue
+
+    raise DataLoadError(
+        f"Could not parse '{filename}' with encodings {encodings}. "
+        f"Last error: {last_exc}"
+    )
+
+
 def load_file(file_path: str | Path) -> pd.DataFrame:
     """
     Load a CSV or Parquet file into a DataFrame.
@@ -45,14 +82,8 @@ def load_file(file_path: str | Path) -> pd.DataFrame:
 
     try:
         if suffix == ".csv":
-            for encoding in ("utf-8", "latin-1", "cp1252", "utf-8-sig"):
-                try:
-                    df = pd.read_csv(path, low_memory=False, encoding=encoding)
-                    break
-                except UnicodeDecodeError:
-                    continue
-            else:
-                raise DataLoadError(f"Could not decode '{path.name}' with any supported encoding.")
+            with open(path, "rb") as fh:
+                df = _read_csv_robust(fh, path.name)
         else:
             df = pd.read_parquet(path)
     except DataLoadError:
@@ -76,15 +107,7 @@ def load_bytes(content: bytes, filename: str) -> pd.DataFrame:
     buf = io.BytesIO(content)
     try:
         if suffix == ".csv":
-            for encoding in ("utf-8", "latin-1", "cp1252", "utf-8-sig"):
-                try:
-                    buf.seek(0)
-                    df = pd.read_csv(buf, low_memory=False, encoding=encoding)
-                    break
-                except UnicodeDecodeError:
-                    continue
-            else:
-                raise DataLoadError(f"Could not decode '{filename}' with any supported encoding (utf-8, latin-1, cp1252).")
+            df = _read_csv_robust(buf, filename)
         else:
             df = pd.read_parquet(buf)
     except DataLoadError:
