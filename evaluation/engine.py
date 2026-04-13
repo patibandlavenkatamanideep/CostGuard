@@ -266,21 +266,22 @@ def _rdab_score(
 
 # ─── Simulation fallback ──────────────────────────────────────────────────────
 
-def _simulate_scorecard(pricing: ModelPricing, seed: int = 42) -> tuple[RDABScoreCard, float]:
+def _simulate_scorecard(
+    pricing: ModelPricing,
+    seed: int = 42,
+    dataset_fingerprint: int = 0,
+) -> tuple[RDABScoreCard, float]:
     """
     Produce a deterministic simulated RDAB scorecard for models without a live key.
     Based on RDAB benchmark findings (April 2026 leaderboard data).
 
-    Key empirical findings from RDAB's 163 benchmark runs:
-    - GPT-4.1 leads EDA/inference tasks
-    - Llama 3.3-70B outperforms on modeling tasks
-    - Gemini 2.5 Flash = best cost-per-score
-    - All models score ~0.25 on stat_validity
-    - Claude Haiku consumed 608K tokens on tasks where GPT-4.1 used 30K
+    dataset_fingerprint makes scores shift per dataset so different uploads
+    produce different winners rather than always the same model.
     """
     import hashlib
 
-    h = int(hashlib.md5(f"{pricing.model_id}{seed}".encode()).hexdigest(), 16)
+    combined = seed ^ (dataset_fingerprint % 99991)  # mix dataset into seed
+    h = int(hashlib.md5(f"{pricing.model_id}{combined}".encode()).hexdigest(), 16)
     rng = (h % 10000) / 10000.0
 
     base = {
@@ -301,7 +302,7 @@ def _simulate_scorecard(pricing: ModelPricing, seed: int = 42) -> tuple[RDABScor
     for key, vals in overrides.get(pricing.model_id, {}).items():
         base[key] = vals
 
-    def _jitter(v: float, scale: float = 0.04) -> float:
+    def _jitter(v: float, scale: float = 0.07) -> float:
         return max(0.0, min(1.0, v + (rng - 0.5) * scale))
 
     correctness   = _jitter(base["correctness"])
@@ -342,6 +343,7 @@ async def _evaluate_model(
     questions: list[str],
     live_providers: list[str],
     merged_env: dict[str, str],
+    dataset_fingerprint: int = 0,
 ) -> ModelResult:
     """
     Evaluate one model: live RDAB agent if a key is available for its provider,
@@ -377,11 +379,11 @@ async def _evaluate_model(
             logger.warning(
                 f"[RDAB live] {pricing.model_id} failed ({exc}), falling back to simulation"
             )
-            rdab_scorecard, latency_ms = _simulate_scorecard(pricing)
+            rdab_scorecard, latency_ms = _simulate_scorecard(pricing, dataset_fingerprint=dataset_fingerprint)
     else:
         reason = "RDAB not installed" if not RDAB_AVAILABLE else f"no API key for '{pricing.provider}'"
         logger.info(f"[RDAB sim] {pricing.model_id} ({reason})")
-        rdab_scorecard, latency_ms = _simulate_scorecard(pricing)
+        rdab_scorecard, latency_ms = _simulate_scorecard(pricing, dataset_fingerprint=dataset_fingerprint)
 
     total_cost = pricing.estimate_cost(input_tokens, output_tokens)
 
@@ -490,12 +492,18 @@ async def run_evaluation(
     # ── Step 5: Evaluate all models ───────────────────────────────────────────
     all_models = get_models_for_providers([])  # Always show all for comparison
 
+    # Fingerprint the dataset so simulation scores vary per upload
+    import hashlib as _hl
+    _fp_str = f"{stats.rows}:{stats.columns}:{stats.missing_pct:.1f}:{','.join(stats.column_names[:8])}"
+    dataset_fingerprint = int(_hl.md5(_fp_str.encode()).hexdigest(), 16)
+
     sem = asyncio.Semaphore(settings.eval_concurrency)
 
     async def bounded_eval(pricing: ModelPricing) -> ModelResult:
         async with sem:
             return await _evaluate_model(
-                pricing, task_dict, sample_df, questions, live_providers, merged_env
+                pricing, task_dict, sample_df, questions, live_providers, merged_env,
+                dataset_fingerprint=dataset_fingerprint,
             )
 
     results: list[ModelResult] = await asyncio.gather(
@@ -506,8 +514,12 @@ async def run_evaluation(
     max_cost = max((r.estimated_total_cost_usd for r in results), default=1.0) or 1.0
 
     def composite_score(r: ModelResult) -> float:
-        cost_score = 1.0 - (r.estimated_total_cost_usd / max_cost)
-        return r.rdab_scorecard.rdab_score * 0.6 + cost_score * 0.4
+        import math
+        # Use log-scale cost normalisation so 10x-cheaper models don't
+        # automatically dominate over models with meaningfully better RDAB scores.
+        # rdab_score 75% + log_cost_score 25%.
+        log_cost_score = 1.0 - math.sqrt(r.estimated_total_cost_usd / max_cost)
+        return r.rdab_scorecard.rdab_score * 0.75 + log_cost_score * 0.25
 
     ranked = sorted(results, key=composite_score, reverse=True)
     recommended = ranked[0]
