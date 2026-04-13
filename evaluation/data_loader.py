@@ -45,7 +45,6 @@ def _read_csv_robust(file_obj: io.IOBase, filename: str) -> pd.DataFrame:
             file_obj.seek(0)
             df = pd.read_csv(
                 file_obj,
-                low_memory=False,
                 encoding=encoding,
                 on_bad_lines="skip",   # skip rows with wrong field count
                 engine="python",       # more lenient than the C engine
