@@ -8,12 +8,16 @@ Architecture:
   1. Load & sample the uploaded CSV/Parquet
   2. Dynamically build a RDAB-compatible TaskSchema from the user's data
   3. For each available model:
-     a. Inject API keys into the environment
+     a. Inject API keys into the environment (server-side + session keys merged)
      b. Run the RDAB Agent (via harness.Agent + harness.Runner) on the task
      c. Score with RDAB's CompositeScorer (correctness, code_quality,
         efficiency, stat_validity)
   4. Models without a live API key receive a deterministic simulation score
   5. Rank all models by composite score and return the recommendation
+
+Mode determination:
+  - LIVE: at least one provider has a real API key (server env OR session key)
+  - SIMULATION: no keys available at all — uses calibrated historical scores
 
 RDAB scoring dimensions (ref: realdataagentbench/scoring/):
   - Correctness (50%): answer accuracy vs ground truth
@@ -37,7 +41,15 @@ import pandas as pd
 
 from backend.config import get_settings
 from backend.logger import logger
-from backend.models import DatasetStats, EvalStatus, ModelResult, ModelTier, RDABScoreCard
+from backend.models import (
+    DatasetStats,
+    EvalMode,
+    EvalStatus,
+    ModelResult,
+    ModelTier,
+    RDABScoreCard,
+    SessionKeys,
+)
 from evaluation.data_loader import (
     compute_stats,
     dataframe_to_prompt_text,
@@ -133,28 +145,34 @@ async def _run_rdab_agent(
     pricing: ModelPricing,
     task_dict: dict[str, Any],
     df: pd.DataFrame,
+    merged_env: dict[str, str],
 ) -> tuple[dict[str, Any], float]:
     """
     Run a single RDAB agent evaluation for one model.
-    Returns (result_dict, latency_ms).
+
+    Args:
+        pricing: Model pricing / metadata object.
+        task_dict: RDAB task specification.
+        df: Sampled dataframe.
+        merged_env: Combined server + session API key env vars.
+
+    Returns:
+        (result_dict, latency_ms).
     Raises on timeout or API error — caller catches and falls back to simulation.
     """
-    # Inject API keys into env for RDAB to pick up
-    rdab_env = settings.rdab_env_dict()
-    old_env = {}
-    for k, v in rdab_env.items():
+    old_env: dict[str, str | None] = {}
+    for k, v in merged_env.items():
         old_env[k] = os.environ.get(k)
         os.environ[k] = v
 
+    tmp_path: str | None = None
     try:
         start = time.monotonic()
 
-        # Write the dataframe to a temp parquet so RDAB runner can load it
         with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as tmp:
             tmp_path = tmp.name
         df.to_parquet(tmp_path, index=False)
 
-        # Run synchronously in a thread pool to avoid blocking the event loop
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None,
@@ -168,16 +186,16 @@ async def _run_rdab_agent(
         return result, latency_ms
 
     finally:
-        # Restore original env
         for k, v in old_env.items():
             if v is None:
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
-        try:
-            Path(tmp_path).unlink(missing_ok=True)
-        except Exception:
-            pass
+        if tmp_path:
+            try:
+                Path(tmp_path).unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 def _rdab_sync_run(
@@ -221,7 +239,6 @@ def _rdab_score(
     """Run RDAB's CompositeScorer on a result dict."""
     from realdataagentbench.scoring import CompositeScorer
 
-    # Build a minimal task object that CompositeScorer expects
     class _MinimalTask:
         id = task_dict["id"]
         difficulty = task_dict["difficulty"]
@@ -267,21 +284,19 @@ def _simulate_scorecard(pricing: ModelPricing, seed: int = 42) -> tuple[RDABScor
     h = int(hashlib.md5(f"{pricing.model_id}{seed}".encode()).hexdigest(), 16)
     rng = (h % 10000) / 10000.0
 
-    # Empirically-calibrated base scores per tier
     base = {
         "premium": {"correctness": 0.88, "code_quality": 0.79, "efficiency": 0.78, "stat_validity": 0.26},
         "balanced": {"correctness": 0.78, "code_quality": 0.72, "efficiency": 0.84, "stat_validity": 0.24},
         "economy":  {"correctness": 0.68, "code_quality": 0.66, "efficiency": 0.88, "stat_validity": 0.22},
     }[pricing.tier]
 
-    # Per-model adjustments based on RDAB leaderboard findings
     overrides: dict[str, dict[str, float]] = {
-        "gpt-4.1":                    {"correctness": 0.93, "efficiency": 0.97},  # RDAB cost-leader
-        "gemini-2.5-flash":           {"efficiency": 0.95},                        # Cheapest per token
-        "llama-3.3-70b-versatile":    {"correctness": 0.82, "code_quality": 0.78}, # Modeling tasks
-        "claude-sonnet-4-6":          {"correctness": 0.90, "efficiency": 0.65},   # Token-heavy
-        "claude-haiku-4-5-20251001":  {"efficiency": 0.40},                        # Token inefficient (RDAB finding)
-        "grok-3":                     {"code_quality": 0.55},                      # sklearn blind spot
+        "gpt-4.1":                    {"correctness": 0.93, "efficiency": 0.97},
+        "gemini-2.5-flash":           {"efficiency": 0.95},
+        "llama-3.3-70b-versatile":    {"correctness": 0.82, "code_quality": 0.78},
+        "claude-sonnet-4-6":          {"correctness": 0.90, "efficiency": 0.65},
+        "claude-haiku-4-5-20251001":  {"efficiency": 0.40},
+        "grok-3":                     {"code_quality": 0.55},
         "grok-3-mini":                {"code_quality": 0.50},
     }
     for key, vals in overrides.get(pricing.model_id, {}).items():
@@ -290,20 +305,19 @@ def _simulate_scorecard(pricing: ModelPricing, seed: int = 42) -> tuple[RDABScor
     def _jitter(v: float, scale: float = 0.04) -> float:
         return max(0.0, min(1.0, v + (rng - 0.5) * scale))
 
-    correctness  = _jitter(base["correctness"])
-    code_quality = _jitter(base["code_quality"])
-    efficiency   = _jitter(base["efficiency"])
+    correctness   = _jitter(base["correctness"])
+    code_quality  = _jitter(base["code_quality"])
+    efficiency    = _jitter(base["efficiency"])
     stat_validity = _jitter(base["stat_validity"], scale=0.06)
 
     weights = {"correctness": 0.50, "code_quality": 0.20, "efficiency": 0.15, "stat_validity": 0.15}
     rdab_score = (
-        correctness  * weights["correctness"] +
-        code_quality * weights["code_quality"] +
-        efficiency   * weights["efficiency"] +
+        correctness   * weights["correctness"] +
+        code_quality  * weights["code_quality"] +
+        efficiency    * weights["efficiency"] +
         stat_validity * weights["stat_validity"]
     )
 
-    # Latency simulation (ms)
     base_lat = {"premium": 1400, "balanced": 700, "economy": 380}[pricing.tier]
     latency = base_lat + (rng - 0.5) * 400
 
@@ -328,8 +342,20 @@ async def _evaluate_model(
     df: pd.DataFrame,
     questions: list[str],
     live_providers: list[str],
+    merged_env: dict[str, str],
 ) -> ModelResult:
-    """Evaluate one model: live RDAB agent if key available, else simulation."""
+    """
+    Evaluate one model: live RDAB agent if a key is available for its provider,
+    else deterministic simulation.
+
+    Args:
+        pricing: Model spec.
+        task_dict: RDAB task.
+        df: Sampled dataset.
+        questions: Generated evaluation questions.
+        live_providers: Providers with a real API key (server + session merged).
+        merged_env: Full env var dict for RDAB injection (server + session merged).
+    """
     data_text = dataframe_to_prompt_text(df)
     input_tokens, output_tokens = estimate_batch_tokens(
         system_prompt="You are an expert data analyst.",
@@ -342,12 +368,11 @@ async def _evaluate_model(
 
     if RDAB_AVAILABLE and pricing.provider in live_providers:
         try:
-            result, latency_ms = await _run_rdab_agent(pricing, task_dict, df)
+            result, latency_ms = await _run_rdab_agent(pricing, task_dict, df, merged_env)
             rdab_scorecard = _rdab_score(task_dict, result)
             logger.info(
                 f"[RDAB live] {pricing.model_id}: "
-                f"score={rdab_scorecard.rdab_score:.3f} "
-                f"lat={latency_ms:.0f}ms"
+                f"score={rdab_scorecard.rdab_score:.3f} lat={latency_ms:.0f}ms"
             )
         except Exception as exc:
             logger.warning(
@@ -368,9 +393,8 @@ async def _evaluate_model(
         "max_tokens": 512,
         "estimated_cost_per_run_usd": round(total_cost, 6),
         "rdab_score": rdab_scorecard.rdab_score,
-        # Dimensions breakdown
         "scores": {
-            "correctness": rdab_scorecard.correctness,
+            "correctness":  rdab_scorecard.correctness,
             "code_quality": rdab_scorecard.code_quality,
             "efficiency":   rdab_scorecard.efficiency,
             "stat_validity": rdab_scorecard.stat_validity,
@@ -383,7 +407,7 @@ async def _evaluate_model(
         display_name=pricing.display_name,
         tier=ModelTier(pricing.tier),
         rdab_scorecard=rdab_scorecard,
-        accuracy_score=rdab_scorecard.rdab_score,  # scalar alias
+        accuracy_score=rdab_scorecard.rdab_score,
         latency_ms=latency_ms,
         input_cost_per_1k=pricing.input_per_1k,
         output_cost_per_1k=pricing.output_per_1k,
@@ -404,44 +428,67 @@ async def run_evaluation(
     file_size_bytes: int,
     task_description: str = "Analyze this dataset and answer questions about it.",
     num_questions: int = 5,
+    session_keys: SessionKeys | None = None,
 ) -> dict[str, Any]:
     """
     Full CostGuard evaluation pipeline powered by RealDataAgentBench.
 
+    Supports two modes:
+      - LIVE: at least one provider has an API key (server env or session key)
+      - SIMULATION: no keys → deterministic scores from RDAB benchmark history
+
     Steps:
       1. Load + validate uploaded file
-      2. Compute dataset statistics
-      3. Generate analytical questions
-      4. Build a dynamic RDAB TaskSchema
-      5. Evaluate all models (live RDAB agent or deterministic simulation)
-      6. Rank by composite score and produce recommendation
-      7. Return structured EvalResponse dict
+      2. Merge server-side and session API keys; determine mode
+      3. Compute dataset statistics
+      4. Generate analytical questions
+      5. Build a dynamic RDAB TaskSchema
+      6. Evaluate all models (live RDAB agent or deterministic simulation)
+      7. Rank by composite score and produce recommendation
+      8. Return structured EvalResponse dict
+
+    Args:
+        file_content: Raw bytes of the uploaded file.
+        filename: Original filename (used to detect CSV vs Parquet).
+        file_size_bytes: Size in bytes (for stats display).
+        task_description: User-provided intent for the data.
+        num_questions: Number of RDAB evaluation questions to generate.
+        session_keys: Optional per-request API keys from the UI (never persisted).
     """
     from evaluation.question_generator import generate_questions
 
     eval_id = str(uuid.uuid4())[:8]
     start_total = time.monotonic()
 
+    # ── Step 1: Resolve keys and mode ────────────────────────────────────────
+    sk = session_keys or SessionKeys()
+    session_env = sk.to_env_dict()
+
+    # Merge: session keys take precedence over server-side keys for the same provider
+    merged_env = {**settings.rdab_env_dict(), **session_env}
+    live_providers = settings.merged_live_providers(session_env)
+    eval_mode = EvalMode.LIVE if live_providers else EvalMode.SIMULATION
+
     logger.info(
-        f"[{eval_id}] Starting RDAB-powered evaluation for '{filename}' "
-        f"(RDAB available: {RDAB_AVAILABLE})"
+        f"[{eval_id}] Starting evaluation for '{filename}' | "
+        f"mode={eval_mode.value} | live_providers={live_providers} | "
+        f"RDAB available={RDAB_AVAILABLE}"
     )
 
-    # ── Step 1: Load data ────────────────────────────────────────────────────
+    # ── Step 2: Load data ─────────────────────────────────────────────────────
     df = load_bytes(file_content, filename)
     sample_df = sample_dataframe(df)
     stats = compute_stats(df, filename, file_size_bytes)
 
-    # ── Step 2: Generate questions ───────────────────────────────────────────
+    # ── Step 3: Generate questions ────────────────────────────────────────────
     questions = generate_questions(sample_df, num_questions=num_questions)
     logger.info(f"[{eval_id}] Generated {len(questions)} evaluation questions")
 
-    # ── Step 3: Build dynamic task ───────────────────────────────────────────
+    # ── Step 4: Build dynamic task ────────────────────────────────────────────
     data_text = dataframe_to_prompt_text(sample_df)
     task_dict = _build_task_dict(sample_df, data_text, task_description, questions)
 
-    # ── Step 4: Evaluate all models ──────────────────────────────────────────
-    live_providers = settings.available_providers
+    # ── Step 5: Evaluate all models ───────────────────────────────────────────
     all_models = get_models_for_providers([])  # Always show all for comparison
 
     sem = asyncio.Semaphore(settings.eval_concurrency)
@@ -449,15 +496,14 @@ async def run_evaluation(
     async def bounded_eval(pricing: ModelPricing) -> ModelResult:
         async with sem:
             return await _evaluate_model(
-                pricing, task_dict, sample_df, questions, live_providers
+                pricing, task_dict, sample_df, questions, live_providers, merged_env
             )
 
     results: list[ModelResult] = await asyncio.gather(
         *[bounded_eval(m) for m in all_models]
     )
 
-    # ── Step 5: Rank and recommend ───────────────────────────────────────────
-    # Composite rank: 60% RDAB score + 40% cost efficiency
+    # ── Step 6: Rank and recommend ────────────────────────────────────────────
     max_cost = max((r.estimated_total_cost_usd for r in results), default=1.0) or 1.0
 
     def composite_score(r: ModelResult) -> float:
@@ -466,12 +512,12 @@ async def run_evaluation(
 
     ranked = sorted(results, key=composite_score, reverse=True)
     recommended = ranked[0]
-    reason = _build_recommendation_reason(recommended, ranked)
+    reason = _build_recommendation_reason(recommended, ranked, eval_mode)
     copyable_config = json.dumps(recommended.config_snippet, indent=2)
 
     duration_s = round(time.monotonic() - start_total, 2)
     logger.info(
-        f"[{eval_id}] Completed in {duration_s}s | "
+        f"[{eval_id}] Completed in {duration_s}s | mode={eval_mode.value} | "
         f"Recommended: {recommended.model_id} "
         f"(RDAB={recommended.rdab_scorecard.rdab_score:.3f}, "
         f"cost=${recommended.estimated_total_cost_usd:.5f})"
@@ -480,6 +526,8 @@ async def run_evaluation(
     return {
         "eval_id": eval_id,
         "status": EvalStatus.COMPLETED,
+        "eval_mode": eval_mode,
+        "live_providers": live_providers,
         "dataset_stats": stats,
         "results": ranked,
         "recommended_model": recommended,
@@ -489,13 +537,17 @@ async def run_evaluation(
     }
 
 
-def _build_recommendation_reason(best: ModelResult, ranked: list[ModelResult]) -> str:
+def _build_recommendation_reason(
+    best: ModelResult,
+    ranked: list[ModelResult],
+    eval_mode: EvalMode,
+) -> str:
     """Generate a human-readable RDAB-informed recommendation."""
     sc = best.rdab_scorecard
-    sim_note = " *(simulated)*" if sc.simulated else ""
+    mode_note = " *(simulated scores — add API keys for live benchmarking)*" if eval_mode == EvalMode.SIMULATION else " *(live RDAB benchmark)*"
 
     lines = [
-        f"**{best.display_name}** achieves the best balance of RDAB score and cost for your data{sim_note}.",
+        f"**{best.display_name}** achieves the best balance of RDAB score and cost for your data{mode_note}.",
         f"RDAB composite score: **{sc.rdab_score:.1%}** "
         f"(correctness {sc.correctness:.0%} · code quality {sc.code_quality:.0%} · "
         f"efficiency {sc.efficiency:.0%} · stat validity {sc.stat_validity:.0%}).",

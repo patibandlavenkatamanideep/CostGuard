@@ -1,6 +1,12 @@
 """
 CostGuard — Streamlit Dashboard
 Upload a CSV/Parquet → get instant LLM cost estimates and recommendations.
+
+Phase 2 additions:
+  - Settings sidebar: optional API key entry (session-only, never stored)
+  - Mode badge: "Live Mode" vs "Simulation Mode"
+  - 4-dimensional radar chart for top 5 models
+  - "Copy Recommended Config" button
 """
 
 from __future__ import annotations
@@ -22,7 +28,7 @@ st.set_page_config(
     page_title="CostGuard — LLM Cost Estimator",
     page_icon="",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # ─── Custom CSS ───────────────────────────────────────────────────────────────
@@ -35,11 +41,33 @@ st.markdown(
         padding: 2.5rem 2rem;
         border-radius: 16px;
         color: white;
-        margin-bottom: 2rem;
+        margin-bottom: 1rem;
         text-align: center;
     }
     .hero-header h1 { font-size: 2.8rem; font-weight: 800; margin: 0; }
     .hero-header p  { font-size: 1.15rem; opacity: 0.9; margin-top: 0.5rem; }
+
+    /* Mode badges */
+    .mode-live {
+        display: inline-block;
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: white;
+        font-weight: 700;
+        font-size: 1rem;
+        padding: 0.45rem 1.2rem;
+        border-radius: 99px;
+        margin-bottom: 1rem;
+    }
+    .mode-sim {
+        display: inline-block;
+        background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);
+        color: #333;
+        font-weight: 700;
+        font-size: 1rem;
+        padding: 0.45rem 1.2rem;
+        border-radius: 99px;
+        margin-bottom: 1rem;
+    }
 
     /* Recommendation card */
     .rec-card {
@@ -64,8 +92,8 @@ st.markdown(
     .metric-card .metric-value { font-size: 1.8rem; font-weight: 700; color: #2d3748; }
     .metric-card .metric-label { font-size: 0.85rem; color: #718096; margin-top: 0.25rem; }
 
-    /* Copy button */
-    .stButton > button {
+    /* Primary button override */
+    .stButton > button[kind="primary"] {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white !important;
         border: none;
@@ -74,24 +102,18 @@ st.markdown(
         padding: 0.6rem 1.4rem;
         transition: opacity 0.2s;
     }
-    .stButton > button:hover { opacity: 0.88; }
+    .stButton > button[kind="primary"]:hover { opacity: 0.88; }
 
     /* Table styling */
     .stDataFrame { border-radius: 12px; overflow: hidden; }
 
-    /* Upload zone */
-    .upload-zone {
-        border: 2px dashed #667eea;
-        border-radius: 16px;
-        padding: 3rem;
-        text-align: center;
-        background: #f7f8ff;
-    }
-
     /* Status badge */
-    .badge-premium { color: #6b21a8; background: #f3e8ff; padding: 2px 10px; border-radius: 99px; font-size: 0.8rem; font-weight: 600; }
+    .badge-premium  { color: #6b21a8; background: #f3e8ff; padding: 2px 10px; border-radius: 99px; font-size: 0.8rem; font-weight: 600; }
     .badge-balanced { color: #1d4ed8; background: #dbeafe; padding: 2px 10px; border-radius: 99px; font-size: 0.8rem; font-weight: 600; }
-    .badge-economy { color: #065f46; background: #d1fae5; padding: 2px 10px; border-radius: 99px; font-size: 0.8rem; font-weight: 600; }
+    .badge-economy  { color: #065f46; background: #d1fae5; padding: 2px 10px; border-radius: 99px; font-size: 0.8rem; font-weight: 600; }
+
+    /* Key input in sidebar */
+    .key-input-label { font-size: 0.78rem; color: #718096; margin-bottom: 2px; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -118,15 +140,23 @@ def call_evaluate(
     filename: str,
     task_description: str,
     num_questions: int,
+    api_keys: dict[str, str],
 ) -> dict:
+    """Call /evaluate with optional session API keys passed as form fields."""
+    form_data: dict[str, str] = {
+        "task_description": task_description,
+        "num_questions": str(num_questions),
+    }
+    # Merge non-empty keys (never send empty strings)
+    for field, value in api_keys.items():
+        if value and value.strip():
+            form_data[field] = value.strip()
+
     with httpx.Client(base_url=API_BASE, timeout=120) as client:
         response = client.post(
             "/evaluate",
             files={"file": (filename, file_bytes, _mime(filename))},
-            data={
-                "task_description": task_description,
-                "num_questions": str(num_questions),
-            },
+            data=form_data,
         )
     if response.status_code != 200:
         err = response.json()
@@ -152,23 +182,117 @@ def _tier_badge(tier: str) -> str:
 
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### Settings")
+    st.markdown("## Settings")
+
+    # ── Evaluation options ─────────────────────────────────────────────────
+    st.markdown("### Evaluation")
     task_description = st.text_area(
         "Task description",
         value="Analyze this dataset and answer questions about it.",
-        height=100,
+        height=90,
         help="Describe what you plan to do with this data. More specific = better recommendations.",
     )
     num_questions = st.slider(
-        "Evaluation depth",
+        "Evaluation depth (questions)",
         min_value=1,
         max_value=10,
         value=5,
         help="More questions = more accurate recommendation, but slower.",
     )
+
+    st.divider()
+
+    # ── API Keys ───────────────────────────────────────────────────────────
+    st.markdown("### API Keys (optional)")
+    st.caption(
+        "Enter keys to run **Live Mode** — real LLM agents evaluated against your data. "
+        "Keys are kept in this browser session only and are **never stored or logged**."
+    )
+
+    with st.expander("Enter API keys", expanded=False):
+        anthropic_key = st.text_input(
+            "Anthropic (Claude)",
+            type="password",
+            placeholder="sk-ant-...",
+            help="Enables Claude Sonnet 4.6, Opus 4.6, Haiku 4.5",
+        )
+        openai_key = st.text_input(
+            "OpenAI (GPT)",
+            type="password",
+            placeholder="sk-...",
+            help="Enables GPT-4.1, GPT-4o, GPT-4.1 mini/nano",
+        )
+        groq_key = st.text_input(
+            "Groq (Llama / Mixtral)",
+            type="password",
+            placeholder="gsk_...",
+            help="Enables Llama 3.3 70B, Llama 3.1 70B, Mixtral 8x7B via Groq",
+        )
+        gemini_key = st.text_input(
+            "Google (Gemini)",
+            type="password",
+            placeholder="AIza...",
+            help="Enables Gemini 2.5 Pro and Flash",
+        )
+        xai_key = st.text_input(
+            "xAI (Grok)",
+            type="password",
+            placeholder="xai-...",
+            help="Enables Grok-3 and Grok-3 mini",
+        )
+        if st.button("Clear all keys", use_container_width=True):
+            for k in ("anthropic_key", "openai_key", "groq_key", "gemini_key", "xai_key"):
+                st.session_state.pop(k, None)
+            st.rerun()
+
+    # Persist keys in session_state for the duration of the browser session
+    st.session_state["_keys"] = {
+        "anthropic_api_key": anthropic_key,
+        "openai_api_key": openai_key,
+        "groq_api_key": groq_key,
+        "xai_api_key": xai_key,
+        "gemini_api_key": gemini_key,
+    }
+
+    any_key = any(v and v.strip() for v in st.session_state["_keys"].values())
+
+    st.divider()
+    if any_key:
+        providers_entered = [
+            p for p, k in [
+                ("Anthropic", anthropic_key), ("OpenAI", openai_key),
+                ("Groq", groq_key), ("Google", gemini_key), ("xAI", xai_key),
+            ] if k and k.strip()
+        ]
+        st.success(f"Live Mode enabled — {', '.join(providers_entered)}")
+    else:
+        st.info("No keys entered — Simulation Mode active")
+
     st.divider()
     st.markdown("**Supported models:**")
-    st.caption("GPT-4o, GPT-4o mini, Claude 3.5 Sonnet, Claude 3.5 Haiku, Gemini 1.5 Pro/Flash, Llama 3.1 70B, Mixtral 8x7B")
+    st.caption(
+        "Claude Sonnet/Opus/Haiku · GPT-5/4.1/4o · "
+        "Gemini 2.5 Pro/Flash · Llama 3.3 70B · Mixtral · Grok-3"
+    )
+
+
+# ─── Mode Banner ──────────────────────────────────────────────────────────────
+keys_in_session = st.session_state.get("_keys", {})
+any_key = any(v and v.strip() for v in keys_in_session.values())
+
+if any_key:
+    st.markdown(
+        '<div class="mode-live">Live Mode — running real LLM agents against your data</div>',
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        '<div class="mode-sim">'
+        'Simulation Mode — using calibrated RDAB benchmark scores '
+        '(add API keys in the sidebar for live evaluation)'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ─── Upload Section ───────────────────────────────────────────────────────────
@@ -188,16 +312,19 @@ with col_info:
     st.markdown(
         """
 1. **Upload** your CSV or Parquet
-2. **CostGuard** benchmarks all major LLMs against your actual data
-3. **Get** the best model + exact cost per run
-4. **Copy** the config with one click
+2. *(Optional)* Add API keys in the sidebar for **Live Mode**
+3. **CostGuard** benchmarks all major LLMs against your data
+4. **Get** the best model + exact cost per run
+5. **Copy** the config with one click
         """,
         unsafe_allow_html=False,
     )
 
+
 # ─── Sample datasets ──────────────────────────────────────────────────────────
 st.markdown("**No data? Try a sample:**")
 c1, c2, c3 = st.columns(3)
+
 
 def _make_sample_csv() -> bytes:
     df = pd.DataFrame({
@@ -208,6 +335,7 @@ def _make_sample_csv() -> bytes:
         "churn": [i % 5 == 0 for i in range(100)],
     })
     return df.to_csv(index=False).encode()
+
 
 if c1.button("E-commerce sample"):
     st.session_state["sample_file"] = ("ecommerce_customers.csv", _make_sample_csv())
@@ -246,15 +374,29 @@ if active_file:
     filename, file_bytes = active_file
     st.success(f"Loaded **{filename}** ({len(file_bytes)/1024:.1f} KB)")
 
-    run_btn = st.button("Analyze & Get Recommendations", type="primary", use_container_width=True)
+    run_btn = st.button(
+        "Analyze & Get Recommendations",
+        type="primary",
+        use_container_width=True,
+    )
 
     if run_btn or st.session_state.get("auto_run"):
         st.session_state["auto_run"] = False
 
-        with st.spinner("Running benchmark evaluation across all LLMs..."):
-            t0 = time.time()
+        spinner_label = (
+            "Running live RDAB agents across all LLMs..."
+            if any_key
+            else "Running simulation benchmark across all LLMs..."
+        )
+        with st.spinner(spinner_label):
             try:
-                data = call_evaluate(file_bytes, filename, task_description, num_questions)
+                data = call_evaluate(
+                    file_bytes,
+                    filename,
+                    task_description,
+                    num_questions,
+                    st.session_state.get("_keys", {}),
+                )
                 st.session_state["result"] = data
             except Exception as exc:
                 st.error(f"Evaluation failed: {exc}")
@@ -268,6 +410,25 @@ if "sample_file" in st.session_state and not st.session_state.get("result"):
 if result := st.session_state.get("result"):
     rec = result["recommended_model"]
     stats = result["dataset_stats"]
+    eval_mode = result.get("eval_mode", "simulation")
+    live_providers = result.get("live_providers", [])
+
+    # ── Eval mode indicator ────────────────────────────────────────────────
+    if eval_mode == "live":
+        st.markdown(
+            f'<div class="mode-live">'
+            f'Live Mode — benchmarked against {", ".join(live_providers)}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="mode-sim">'
+            'Simulation Mode (no keys provided) — '
+            'scores based on calibrated RDAB historical data'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
     # ── Recommendation banner ──────────────────────────────────────────────
     st.markdown(
@@ -290,10 +451,14 @@ if result := st.session_state.get("result"):
 
     # ── RDAB 4-dimensional scorecard ─────────────────────────────────────
     st.markdown("#### RDAB Score Breakdown")
-    sim_warn = " *(simulation — add API keys for live evaluation)*" if sc.get("simulated") else ""
+    sim_warn = (
+        " *(simulation — add API keys in the sidebar for live evaluation)*"
+        if sc.get("simulated")
+        else ""
+    )
     st.caption(
         f"Powered by RealDataAgentBench{sim_warn}. "
-        "Scoring: Correctness 50% · Code Quality 20% · Efficiency 15% · Stat Validity 15%"
+        "Scoring weights: Correctness 50% · Code Quality 20% · Efficiency 15% · Stat Validity 15%"
     )
     d1, d2, d3, d4 = st.columns(4)
     d1.metric("Correctness", f"{sc['correctness']:.1%}", help="Answer accuracy vs ground truth")
@@ -315,7 +480,7 @@ if result := st.session_state.get("result"):
     # ── Charts ────────────────────────────────────────────────────────────
     st.markdown("### Model Comparison")
     tab1, tab2, tab3, tab4 = st.tabs(
-        ["RDAB Score vs Cost", "4-Dimensional Radar", "Latency", "Detailed Table"]
+        ["RDAB Score vs Cost", "4-D Radar (Top 5)", "Latency", "Detailed Table"]
     )
 
     # Flatten RDAB scorecard fields into the dataframe
@@ -363,7 +528,7 @@ if result := st.session_state.get("result"):
         st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
-        # Radar chart for top 5 models
+        # Radar chart for top 5 models by RDAB score
         top5 = models_df.nlargest(5, "rdab_score")
         categories = ["Correctness", "Code Quality", "Efficiency", "Stat Validity"]
         radar_fig = go.Figure()
@@ -382,10 +547,24 @@ if result := st.session_state.get("result"):
         radar_fig.update_layout(
             polar={"radialaxis": {"visible": True, "range": [0, 1]}},
             showlegend=True,
-            title="RDAB 4-Dimensional Score — Top 5 Models",
-            height=480,
+            title="RDAB 4-Dimensional Scorecard — Top 5 Models",
+            height=500,
         )
         st.plotly_chart(radar_fig, use_container_width=True)
+
+        # Scorecard table for top 5
+        st.markdown("**Top 5 Models — Score Details**")
+        top5_display = top5[[
+            "display_name", "rdab_score", "correctness", "code_quality",
+            "efficiency", "stat_validity", "simulated",
+        ]].copy()
+        top5_display.columns = [
+            "Model", "RDAB Score", "Correctness", "Code Quality",
+            "Efficiency", "Stat Validity", "Simulated",
+        ]
+        for col in ["RDAB Score", "Correctness", "Code Quality", "Efficiency", "Stat Validity"]:
+            top5_display[col] = top5_display[col].map("{:.1%}".format)
+        st.dataframe(top5_display, use_container_width=True, hide_index=True)
         st.caption(
             "Universal stat_validity weakness (~0.25) is a known RDAB finding — "
             "no model consistently reports uncertainty correctly."
@@ -413,13 +592,13 @@ if result := st.session_state.get("result"):
             "display_name", "provider", "tier",
             "rdab_score", "correctness", "code_quality", "efficiency", "stat_validity",
             "latency_ms", "estimated_total_cost_usd",
-            "input_cost_per_1k", "output_cost_per_1k",
+            "input_cost_per_1k", "output_cost_per_1k", "simulated",
         ]].copy()
         display_df.columns = [
             "Model", "Provider", "Tier",
             "RDAB Score", "Correctness", "Code Quality", "Efficiency", "Stat Validity",
             "Latency (ms)", "Cost / Run ($)",
-            "Input $/1K", "Output $/1K",
+            "Input $/1K", "Output $/1K", "Simulated",
         ]
         for col in ["RDAB Score", "Correctness", "Code Quality", "Efficiency", "Stat Validity"]:
             display_df[col] = display_df[col].map("{:.1%}".format)
@@ -427,27 +606,43 @@ if result := st.session_state.get("result"):
         display_df["Cost / Run ($)"] = display_df["Cost / Run ($)"].map("{:.6f}".format)
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-    # ── Copy config ───────────────────────────────────────────────────────
-    st.markdown("### One-Click Config")
+    # ── Copy Recommended Config ────────────────────────────────────────────
+    st.divider()
+    st.markdown("### Recommended Config")
     st.caption(
         f"Drop this into your project to start using **{rec['display_name']}** immediately."
     )
 
     config_text = result["copyable_config"]
 
-    col_code, col_btn = st.columns([4, 1])
-    with col_code:
-        st.code(config_text, language="json")
-    with col_btn:
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        if st.button("Copy Config"):
-            st.toast("Config copied to clipboard!", icon="")
+    # st.code renders a native copy button (clipboard icon top-right of the block)
+    st.code(config_text, language="json")
+
+    col_copy, col_spacer = st.columns([1, 3])
+    with col_copy:
+        if st.button("Copy Recommended Config", type="primary", use_container_width=True):
+            # Inject clipboard write via component HTML (works in most browsers)
             st.markdown(
-                f"""<script>
-                navigator.clipboard.writeText({json.dumps(config_text)});
-                </script>""",
+                f"""
+                <script>
+                (function() {{
+                    const text = {json.dumps(config_text)};
+                    if (navigator.clipboard && window.isSecureContext) {{
+                        navigator.clipboard.writeText(text);
+                    }} else {{
+                        const ta = document.createElement('textarea');
+                        ta.value = text;
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                    }}
+                }})();
+                </script>
+                """,
                 unsafe_allow_html=True,
             )
+            st.toast("Config copied to clipboard!", icon="")
 
     # ── Strengths + limitations of recommended model ───────────────────────
     with st.expander(f"Why {rec['display_name']}? Full analysis", expanded=False):
@@ -458,13 +653,16 @@ if result := st.session_state.get("result"):
                 st.markdown(f"- {s}")
         with col_l:
             st.markdown("**Limitations**")
-            for l in rec["limitations"]:
-                st.markdown(f"- {l}")
+            for lim in rec["limitations"]:
+                st.markdown(f"- {lim}")
 
 
 else:
     if active_file is None:
-        st.info("Upload a CSV or Parquet file above to get started, or try one of the sample datasets.")
+        st.info(
+            "Upload a CSV or Parquet file above to get started, "
+            "or try one of the sample datasets."
+        )
 
 
 # ─── Footer ───────────────────────────────────────────────────────────────────
@@ -472,7 +670,8 @@ st.divider()
 st.markdown(
     """
 <div style="text-align:center; color:#718096; font-size:0.85rem;">
-    Built with FastAPI + Streamlit ·
+    Built with FastAPI + Streamlit · Powered by
+    <a href="https://github.com/patibandlavenkatamanideep/RealDataAgentBench" target="_blank">RealDataAgentBench</a> ·
     <a href="https://github.com/patibandlavenkatamanideep/CostGuard" target="_blank">GitHub</a> ·
     <a href="http://localhost:8000/docs" target="_blank">API Docs</a>
 </div>

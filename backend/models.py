@@ -15,6 +15,11 @@ class EvalStatus(str, Enum):
     FAILED = "failed"
 
 
+class EvalMode(str, Enum):
+    LIVE = "live"
+    SIMULATION = "simulation"
+
+
 class ModelTier(str, Enum):
     PREMIUM = "premium"
     BALANCED = "balanced"
@@ -75,9 +80,62 @@ class EvalRequest(BaseModel):
     num_questions: int = Field(default=5, ge=1, le=20)
 
 
+class SessionKeys(BaseModel):
+    """
+    Per-request API keys supplied by the user via the UI.
+    Never persisted — only used for the duration of a single evaluation call.
+    """
+    anthropic_api_key: str | None = None
+    openai_api_key: str | None = None
+    groq_api_key: str | None = None
+    xai_api_key: str | None = None
+    gemini_api_key: str | None = None
+
+    def to_env_dict(self) -> dict[str, str]:
+        """Return a {ENV_VAR_NAME: key_value} dict for RDAB environment injection."""
+        mapping = {
+            "anthropic_api_key": "ANTHROPIC_API_KEY",
+            "openai_api_key": "OPENAI_API_KEY",
+            "groq_api_key": "GROQ_API_KEY",
+            "xai_api_key": "XAI_API_KEY",
+            "gemini_api_key": "GEMINI_API_KEY",
+        }
+        return {
+            env_var: getattr(self, attr)
+            for attr, env_var in mapping.items()
+            if getattr(self, attr)
+        }
+
+    def live_providers(self) -> list[str]:
+        """Return provider names for which a session key was supplied."""
+        providers: list[str] = []
+        if self.anthropic_api_key:
+            providers.append("anthropic")
+        if self.openai_api_key:
+            providers.append("openai")
+        if self.groq_api_key:
+            providers.append("groq")
+        if self.xai_api_key:
+            providers.append("xai")
+        if self.gemini_api_key:
+            providers.append("google")
+        return providers
+
+    def has_any_key(self) -> bool:
+        return bool(self.to_env_dict())
+
+
 class EvalResponse(BaseModel):
     eval_id: str
     status: EvalStatus
+    eval_mode: EvalMode = Field(
+        default=EvalMode.SIMULATION,
+        description="live if any provider key was used, simulation otherwise",
+    )
+    live_providers: list[str] = Field(
+        default_factory=list,
+        description="Providers that ran with real API keys in this evaluation",
+    )
     dataset_stats: DatasetStats
     results: list[ModelResult]
     recommended_model: ModelResult

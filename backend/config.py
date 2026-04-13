@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     api_base_url: str = "http://localhost:8000"
 
     # ── LLM Provider Keys (mirrors RealDataAgentBench provider support) ─────
+    # These are server-side keys (set via env / .env file).
+    # Per-request session keys from the UI are handled separately in SessionKeys.
     anthropic_api_key: str | None = None   # Claude Sonnet 4.6, Opus 4.6, Haiku 4.5
     openai_api_key: str | None = None      # GPT-5, GPT-4.1, GPT-4o, GPT-4o-mini
     groq_api_key: str | None = None        # Llama 3.3-70B, Mixtral 8x7B
@@ -61,7 +63,7 @@ class Settings(BaseSettings):
 
     @property
     def available_providers(self) -> list[str]:
-        """Return provider names that have API keys configured."""
+        """Return provider names that have server-side API keys configured."""
         providers = []
         if self.anthropic_api_key:
             providers.append("anthropic")
@@ -79,6 +81,7 @@ class Settings(BaseSettings):
         """
         Return a dict of env vars to inject when calling RealDataAgentBench.
         RDAB reads these directly from the environment.
+        Only includes server-side keys — session keys are merged by the engine.
         """
         env: dict[str, str] = {}
         if self.anthropic_api_key:
@@ -92,6 +95,24 @@ class Settings(BaseSettings):
         if self.gemini_api_key:
             env["GEMINI_API_KEY"] = self.gemini_api_key
         return env
+
+    def merged_live_providers(self, session_env: dict[str, str]) -> list[str]:
+        """
+        Combine server-side providers with any providers unlocked by session keys.
+
+        Args:
+            session_env: {ENV_VAR_NAME: key} dict from SessionKeys.to_env_dict()
+
+        Returns:
+            Deduplicated list of provider names that have a live API key.
+        """
+        from evaluation.pricing import PROVIDER_ENV_VARS  # avoid circular at module load
+
+        providers = set(self.available_providers)
+        for provider, env_var in PROVIDER_ENV_VARS.items():
+            if env_var in session_env:
+                providers.add(provider)
+        return sorted(providers)
 
     def ensure_upload_dir(self) -> None:
         os.makedirs(self.upload_dir, exist_ok=True)

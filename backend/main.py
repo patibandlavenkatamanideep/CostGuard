@@ -22,6 +22,7 @@ from backend.models import (
     EvalRequest,
     EvalResponse,
     HealthResponse,
+    SessionKeys,
 )
 from evaluation.data_loader import DataLoadError
 
@@ -123,12 +124,39 @@ async def evaluate_dataset(
         int,
         Form(description="Number of evaluation questions (1–20)", ge=1, le=20),
     ] = 5,
+    # ── Optional per-request API keys (session only — never stored) ─────────
+    anthropic_api_key: Annotated[
+        str | None,
+        Form(description="Anthropic API key for live evaluation (session only)"),
+    ] = None,
+    openai_api_key: Annotated[
+        str | None,
+        Form(description="OpenAI API key for live evaluation (session only)"),
+    ] = None,
+    groq_api_key: Annotated[
+        str | None,
+        Form(description="Groq API key for live evaluation (session only)"),
+    ] = None,
+    xai_api_key: Annotated[
+        str | None,
+        Form(description="xAI API key for live evaluation (session only)"),
+    ] = None,
+    gemini_api_key: Annotated[
+        str | None,
+        Form(description="Google Gemini API key for live evaluation (session only)"),
+    ] = None,
 ) -> EvalResponse:
     """
     Upload a CSV or Parquet file. CostGuard will:
     1. Parse and analyze the dataset
     2. Run a benchmark evaluation across all available LLMs
     3. Return cost estimates and the best model recommendation
+
+    **Modes:**
+    - *Live*: Pass one or more provider API keys as form fields to run real RDAB agents.
+    - *Simulation*: Omit all keys to get calibrated scores from RDAB historical data.
+
+    API keys are used only for this request and are never stored or logged.
     """
     # Validate file size
     content = await file.read()
@@ -146,12 +174,21 @@ async def evaluate_dataset(
             detail="Only CSV and Parquet files are supported.",
         )
 
+    session_keys = SessionKeys(
+        anthropic_api_key=anthropic_api_key or None,
+        openai_api_key=openai_api_key or None,
+        groq_api_key=groq_api_key or None,
+        xai_api_key=xai_api_key or None,
+        gemini_api_key=gemini_api_key or None,
+    )
+    mode_label = "live" if session_keys.has_any_key() else "simulation"
+
     logger.info(
-        f"Received file '{filename}' ({len(content)/1024:.1f} KB), "
-        f"task='{task_description[:60]}'"
+        f"Received file '{filename}' ({len(content)/1024:.1f} KB) | "
+        f"task='{task_description[:60]}' | mode={mode_label} | "
+        f"session_providers={session_keys.live_providers()}"
     )
 
-    # Lazy import to keep startup fast
     from evaluation.engine import run_evaluation
 
     result = await run_evaluation(
@@ -160,6 +197,7 @@ async def evaluate_dataset(
         file_size_bytes=len(content),
         task_description=task_description,
         num_questions=num_questions,
+        session_keys=session_keys,
     )
 
     return EvalResponse(**result)
