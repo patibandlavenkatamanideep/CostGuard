@@ -121,7 +121,7 @@ def dataframe_to_prompt_text(df: pd.DataFrame, max_rows: int = 50) -> str:
         )
     stats_text = "\n".join(stats_parts) if stats_parts else "  (no numeric columns)"
 
-    csv_preview = sample.to_csv(index=False, max_rows=max_rows)
+    csv_preview = sample.to_csv(index=False)
 
     return (
         f"Dataset Shape: {len(df)} rows × {len(df.columns)} columns\n\n"
