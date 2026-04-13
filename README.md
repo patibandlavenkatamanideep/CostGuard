@@ -1,31 +1,37 @@
 # CostGuard
 
-> **Instantly find the best LLM for your data — with exact cost estimates.**
+> **Stop guessing which LLM to use. CostGuard benchmarks 15 models against your actual data in under 15 seconds — and tells you exactly what it will cost.**
 
 [![CI/CD](https://github.com/patibandlavenkatamanideep/CostGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/patibandlavenkatamanideep/CostGuard/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Powered by RDAB](https://img.shields.io/badge/Evaluation-RealDataAgentBench-7c3aed)](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Try%20Now-brightgreen)](https://costguard.up.railway.app)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Try%20Now%20%E2%86%92-brightgreen)](https://costguard.up.railway.app)
+
+---
+
+<p align="center">
+  <a href="https://costguard.up.railway.app">
+    <img src="https://img.shields.io/badge/%E2%9A%A1%20Try%20it%20now%20%E2%80%94%20no%20sign%20up%2C%20no%20API%20keys-costguard.up.railway.app-6d28d9?style=for-the-badge&logo=railway&logoColor=white" alt="Try CostGuard Now" />
+  </a>
+</p>
+
+<p align="center"><strong>No API keys needed for Simulation Mode. Upload a file, get results instantly.</strong></p>
 
 ---
 
 ## What is CostGuard?
 
-Upload any CSV or Parquet file → CostGuard benchmarks **14 major LLMs** against your actual data using **[RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)** as the evaluation engine, and returns:
+Most teams pick an LLM and stick with it — often overpaying by 10–20× for tasks a cheaper model handles just as well. CostGuard fixes that.
 
--  **Best model recommendation** with 4-dimensional RDAB scoring
--  **Exact cost estimate** per run (down to $0.000001)
--  **One-click copyable config** — paste directly into your project
--  **Radar chart** comparing Correctness · Code Quality · Efficiency · Stat Validity
+Upload any CSV or Parquet file. CostGuard runs your data through **[RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)** — a 4-dimensional evaluation harness — across 15 major LLMs, then surfaces:
 
-No account required. No data stored. Works in under 15 seconds.
+- **Best model recommendation** ranked by RDAB score + exact cost
+- **Per-run cost estimate** down to $0.000001 precision
+- **One-click copyable config** — paste directly into your project
+- **Radar chart** comparing Correctness · Code Quality · Efficiency · Stat Validity
 
----
-
-## Live Demo
-
-**[costguard.up.railway.app](https://costguard.up.railway.app)**
+No account. No data stored. Results in under 15 seconds.
 
 ---
 
@@ -64,8 +70,6 @@ graph TB
 
 ## Supported Models
 
-All 5 providers natively supported by RealDataAgentBench.
-
 | Model | Provider | Tier | Input $/1K | RDAB Note |
 |-------|----------|------|-----------|-----------|
 | Claude Sonnet 4.6 | Anthropic | Premium | $0.003 | RDAB default model |
@@ -91,11 +95,11 @@ All 5 providers natively supported by RealDataAgentBench.
 ### 1. Clone & configure
 
 ```bash
-git clone https://github.com/your-org/costguard.git
-cd costguard
+git clone https://github.com/patibandlavenkatamanideep/CostGuard.git
+cd CostGuard
 
 cp .env.example .env
-# Edit .env and add your API keys (at least one of OPENAI_API_KEY or ANTHROPIC_API_KEY)
+# Optional: add API keys for Live Mode. Leave blank for Simulation Mode.
 ```
 
 ### 2. Install & run
@@ -105,14 +109,14 @@ pip install -e .
 ./scripts/dev.sh
 ```
 
-Then open:
+Open:
 - Dashboard: **http://localhost:8501**
 - API Docs: **http://localhost:8000/docs**
 
-### 3. Docker (production)
+### 3. Docker
 
 ```bash
-cp .env.example .env  # fill in your keys
+cp .env.example .env
 docker compose up
 ```
 
@@ -120,36 +124,66 @@ docker compose up
 
 ## Deploy to Railway
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/your-template)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/patibandlavenkatamanideep/CostGuard)
 
-1. Fork this repo
-2. Create a new Railway project → **Deploy from GitHub repo**
-3. Add environment variables from `.env.example` in Railway's Variables tab
-4. Railway auto-detects `railway.json` and deploys both services
+**Exact steps:**
+
+```bash
+# 1. Install the Railway CLI
+npm install -g @railway/cli
+
+# 2. Authenticate
+railway login
+
+# 3. Link or create a project
+railway init
+
+# 4. Deploy (Railway reads railway.json automatically)
+railway up
+
+# 5. Get your public URL
+railway open
+```
+
+**Environment variables** (all optional — app fully works in Simulation Mode without any keys):
+
+| Variable | Purpose |
+|---|---|
+| `ANTHROPIC_API_KEY` | Enable Claude models in Live Mode |
+| `OPENAI_API_KEY` | Enable GPT models in Live Mode |
+| `GROQ_API_KEY` | Enable Llama / Mixtral via Groq |
+| `GEMINI_API_KEY` | Enable Gemini 2.5 Pro / Flash |
+| `XAI_API_KEY` | Enable Grok-3 / Grok-3 mini |
+
+> The container runs FastAPI (internal, port 8000) + Streamlit (public, `$PORT`) side-by-side via `scripts/start.sh`.
 
 ---
 
 ## Deploy to Render
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/patibandlavenkatamanideep/CostGuard)
+
 ```bash
-# Install Render CLI
-npm install -g @render-oss/cli
+# 1. Fork this repo on GitHub
 
-render deploy
+# 2. Go to https://dashboard.render.com → New → Web Service
+#    Connect your fork — Render auto-detects render.yaml
+
+# 3. Add API keys in the Environment tab (all optional)
+
+# 4. Click Deploy — live in ~3 minutes
 ```
-
-Or click: [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/your-org/costguard)
 
 ---
 
 ## API Reference
 
-The FastAPI backend is fully documented at `/docs` (Swagger UI) and `/redoc`.
+Auto-documented at `/docs` (Swagger) and `/redoc`.
 
 ### POST `/evaluate`
 
 ```bash
-curl -X POST http://localhost:8000/evaluate \
+curl -X POST https://costguard.up.railway.app/evaluate \
   -F "file=@my_data.csv" \
   -F "task_description=Analyze customer churn patterns" \
   -F "num_questions=5"
@@ -175,12 +209,12 @@ curl -X POST http://localhost:8000/evaluate \
 
 ### GET `/health`
 ```bash
-curl http://localhost:8000/health
+curl https://costguard.up.railway.app/health
 ```
 
 ### GET `/models`
 ```bash
-curl http://localhost:8000/models
+curl https://costguard.up.railway.app/models
 ```
 
 ---
@@ -197,11 +231,36 @@ CostGuard uses [RealDataAgentBench](https://github.com/patibandlavenkatamanideep
 | **Stat Validity** | 15% | Reports p-values, confidence intervals, avoids p-hacking |
 
 ### Key RDAB Benchmark Findings (163 runs)
+
 - **GPT-4.1** = best cost-performance ratio ($0.038/task vs GPT-5's $0.596)
-- **Gemini 2.5 Flash** = best cost-per-RDAB-score (cheapest at $0.000075/1K input)
+- **Gemini 2.5 Flash** = cheapest per RDAB score ($0.000075/1K input)
 - **Llama 3.3-70B (Groq)** = outperforms on modeling tasks
-- **Claude Haiku** = consumed 608K tokens vs GPT-4.1's 30K on same task
-- **Universal weakness**: All models score ~0.25 on stat_validity
+- **Claude Haiku** = consumed 608K tokens vs GPT-4.1's 30K on the same task
+- **Universal weakness**: all models score ~0.25 on stat_validity
+
+---
+
+## Business Impact
+
+| Use Case | Without CostGuard | With CostGuard |
+|----------|------------------|----------------|
+| Model selection | 2–3 days of testing | **15 seconds** |
+| Cost budgeting | Guesswork | Exact per-run estimates |
+| Over-provisioning | ~60% of teams use GPT-4o for tasks GPT-4.1 handles at 20% of the cost | Right-sized model every time |
+| Onboarding | Engineers research models manually | Copy one config block |
+
+### Example savings (from RDAB benchmark data)
+
+| Scenario | Old choice | CostGuard pick | Savings |
+|----------|-----------|----------------|---------|
+| Structured data analysis | GPT-4o: $0.0025/1K | GPT-4.1: $0.002/1K | **20% cheaper, same quality** |
+| Budget inference at scale | GPT-4o: $0.0025/1K | GPT-4o-mini: $0.00015/1K | **94% cheaper**, <5% accuracy drop |
+| Cheapest viable option | Claude Sonnet: $0.003/1K | Gemini 2.5 Flash: $0.000075/1K | **97.5% cheaper** |
+| Worst over-provisioning (RDAB) | Claude Haiku: 608K tokens | GPT-4.1: 30K tokens | **Same task — 20× fewer tokens** |
+
+> GPT-5 costs $0.015/1K input — 200× more than Gemini 2.5 Flash. CostGuard tells you when that premium is justified.
+
+---
 
 ## Project Structure
 
@@ -216,14 +275,15 @@ costguard/
 │   ├── engine.py        # Core evaluation orchestrator
 │   ├── data_loader.py   # CSV/Parquet ingestion & validation
 │   ├── pricing.py       # Model pricing catalogue
-│   ├── question_generator.py  # RealDataAgentBench-style Q generation
+│   ├── question_generator.py  # RDAB-style question generation
 │   └── token_counter.py # Token estimation
 ├── frontend/
 │   └── app.py           # Streamlit dashboard
 ├── tests/
 │   └── test_evaluation.py
 ├── scripts/
-│   └── dev.sh           # Local dev startup
+│   ├── dev.sh           # Local dev startup
+│   └── start.sh         # Production single-container startup
 ├── .github/workflows/ci.yml
 ├── Dockerfile
 ├── docker-compose.yml
@@ -234,29 +294,16 @@ costguard/
 
 ---
 
-## Business Impact
-
-| Use Case | Without CostGuard | With CostGuard |
-|----------|------------------|----------------|
-| Model selection | 2–3 days of testing | 15 seconds |
-| Cost budgeting | Guesswork | Exact per-run estimates |
-| Over-provisioning | ~60% of teams use GPT-4 for tasks GPT-4o-mini handles | Right-sized model every time |
-| Onboarding | Engineers research models manually | Copy one config block |
-
-> **Real-world savings:** Switching from GPT-4o to GPT-4o-mini for appropriate tasks saves **83–94%** on LLM costs with <5% accuracy impact for structured data tasks.
-
----
-
 ## Development
 
 ```bash
 # Run tests
 pytest tests/ -v
 
-# Run integration tests (requires running server)
+# Integration tests (requires running server)
 pytest tests/ -m integration
 
-# Lint
+# Lint & format
 ruff check .
 ruff format .
 
@@ -274,7 +321,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Security
 
-See [SECURITY.md](SECURITY.md). To report a vulnerability, email security@costguard.dev.
+See [SECURITY.md](SECURITY.md). Report vulnerabilities to security@costguard.dev.
 
 ---
 
@@ -284,4 +331,4 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-*Built with FastAPI, Streamlit, and the philosophy that the best tool is the one you'll actually use.*
+*Built with FastAPI, Streamlit, and RealDataAgentBench. The best model is the one that fits your data — and your budget.*

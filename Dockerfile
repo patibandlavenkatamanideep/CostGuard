@@ -45,9 +45,9 @@ USER appuser
 
 EXPOSE 8000 8501
 
-# Health check for the API
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Health check — Railway/Render hit the public Streamlit port
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8501}/_stcore/health || exit 1
 
-# Default: start the API. Override CMD in docker-compose for Streamlit.
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# start.sh: launches FastAPI on 127.0.0.1:8000 (internal) then Streamlit on $PORT (public)
+CMD ["bash", "scripts/start.sh"]

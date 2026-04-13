@@ -114,6 +114,33 @@ st.markdown(
 
     /* Key input in sidebar */
     .key-input-label { font-size: 0.78rem; color: #718096; margin-bottom: 2px; }
+
+    /* Big CTA banner */
+    .cta-banner {
+        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+        border-radius: 14px;
+        padding: 1.4rem 2rem;
+        color: white;
+        text-align: center;
+        margin-bottom: 1.25rem;
+        box-shadow: 0 4px 18px rgba(5,150,105,0.25);
+    }
+    .cta-banner h2 {
+        font-size: 1.45rem;
+        font-weight: 800;
+        margin: 0 0 0.3rem 0;
+        letter-spacing: -0.3px;
+    }
+    .cta-banner p  { font-size: 0.95rem; opacity: 0.9; margin: 0; }
+    .sim-ok-banner {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 10px;
+        padding: 0.7rem 1.2rem;
+        color: #92400e;
+        font-size: 0.88rem;
+        margin-bottom: 0.75rem;
+    }
 </style>
 """,
     unsafe_allow_html=True,
@@ -294,6 +321,22 @@ else:
         unsafe_allow_html=True,
     )
 
+
+# ─── Big CTA Banner ───────────────────────────────────────────────────────────
+st.markdown(
+    """
+<div class="cta-banner">
+    <h2>⚡ Upload your dataset and get a model recommendation in &lt;15 seconds</h2>
+    <p>No account required &nbsp;·&nbsp; No data stored &nbsp;·&nbsp; Works instantly in Simulation Mode — no API keys needed</p>
+</div>
+<div class="sim-ok-banner">
+    🟡 <strong>No API keys? No problem.</strong>&nbsp;
+    Simulation Mode uses calibrated RDAB benchmark data to recommend the best model for your data —
+    fully functional without any API keys.
+</div>
+""",
+    unsafe_allow_html=True,
+)
 
 # ─── Upload Section ───────────────────────────────────────────────────────────
 col_upload, col_info = st.columns([2, 1], gap="large")
@@ -668,12 +711,12 @@ else:
 # ─── Footer ───────────────────────────────────────────────────────────────────
 st.divider()
 st.markdown(
-    """
+    f"""
 <div style="text-align:center; color:#718096; font-size:0.85rem;">
     Built with FastAPI + Streamlit · Powered by
     <a href="https://github.com/patibandlavenkatamanideep/RealDataAgentBench" target="_blank">RealDataAgentBench</a> ·
     <a href="https://github.com/patibandlavenkatamanideep/CostGuard" target="_blank">GitHub</a> ·
-    <a href="http://localhost:8000/docs" target="_blank">API Docs</a>
+    <a href="{API_BASE}/docs" target="_blank">API Docs</a>
 </div>
 """,
     unsafe_allow_html=True,

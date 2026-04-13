@@ -1,35 +1,28 @@
 services:
   - type: web
-    name: costguard-api
+    name: costguard
     env: docker
     dockerfilePath: ./Dockerfile
-    dockerCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    # start.sh launches FastAPI on :8000 (internal) + Streamlit on $PORT (public)
+    dockerCommand: bash scripts/start.sh
     plan: free
-    healthCheckPath: /health
+    healthCheckPath: /_stcore/health
     envVars:
       - key: APP_ENV
         value: production
       - key: LOG_LEVEL
         value: INFO
+      - key: API_PORT
+        value: "8000"
+      # ── Add your API keys in the Render dashboard ───────────────────────────
+      # These are optional — without them the app runs in Simulation Mode.
       - key: OPENAI_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: CORS_ORIGINS
-        fromService:
-          name: costguard-ui
-          type: web
-          property: host
-
-  - type: web
-    name: costguard-ui
-    env: docker
-    dockerfilePath: ./Dockerfile
-    dockerCommand: streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0
-    plan: free
-    envVars:
-      - key: API_BASE_URL
-        fromService:
-          name: costguard-api
-          type: web
-          property: host
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: XAI_API_KEY
+        sync: false
