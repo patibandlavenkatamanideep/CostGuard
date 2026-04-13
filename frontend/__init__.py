@@ -1,0 +1,1 @@
+"""CostGuard Streamlit frontend."""

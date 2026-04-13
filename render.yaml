@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: costguard-api
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        fromService:
+          name: costguard-ui
+          type: web
+          property: host
+
+  - type: web
+    name: costguard-ui
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0
+    plan: free
+    envVars:
+      - key: API_BASE_URL
+        fromService:
+          name: costguard-api
+          type: web
+          property: host
