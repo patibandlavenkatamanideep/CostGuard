@@ -45,9 +45,18 @@ def load_file(file_path: str | Path) -> pd.DataFrame:
 
     try:
         if suffix == ".csv":
-            df = pd.read_csv(path, low_memory=False)
+            for encoding in ("utf-8", "latin-1", "cp1252", "utf-8-sig"):
+                try:
+                    df = pd.read_csv(path, low_memory=False, encoding=encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            else:
+                raise DataLoadError(f"Could not decode '{path.name}' with any supported encoding.")
         else:
             df = pd.read_parquet(path)
+    except DataLoadError:
+        raise
     except Exception as exc:
         raise DataLoadError(f"Failed to parse file '{path.name}': {exc}") from exc
 
@@ -67,9 +76,19 @@ def load_bytes(content: bytes, filename: str) -> pd.DataFrame:
     buf = io.BytesIO(content)
     try:
         if suffix == ".csv":
-            df = pd.read_csv(buf, low_memory=False)
+            for encoding in ("utf-8", "latin-1", "cp1252", "utf-8-sig"):
+                try:
+                    buf.seek(0)
+                    df = pd.read_csv(buf, low_memory=False, encoding=encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            else:
+                raise DataLoadError(f"Could not decode '{filename}' with any supported encoding (utf-8, latin-1, cp1252).")
         else:
             df = pd.read_parquet(buf)
+    except DataLoadError:
+        raise
     except Exception as exc:
         raise DataLoadError(f"Failed to parse '{filename}': {exc}") from exc
 
