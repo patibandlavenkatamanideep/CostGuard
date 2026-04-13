@@ -91,11 +91,18 @@ async def generic_error_handler(request: Request, exc: Exception) -> JSONRespons
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 async def health_check() -> HealthResponse:
     """Health check endpoint — used by load balancers and Docker healthchecks."""
+    try:
+        import realdataagentbench  # noqa: F401
+        rdab_available = True
+    except ImportError:
+        rdab_available = False
+
     return HealthResponse(
         status="ok",
         version="0.1.0",
         available_providers=settings.available_providers,
         environment=settings.app_env,
+        rdab_available=rdab_available,
     )
 
 

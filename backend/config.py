@@ -31,12 +31,12 @@ class Settings(BaseSettings):
     # ── Streamlit ────────────────────────────────────────────────────────────
     api_base_url: str = "http://localhost:8000"
 
-    # ── LLM Provider Keys ───────────────────────────────────────────────────
-    openai_api_key: str | None = None
-    anthropic_api_key: str | None = None
-    google_api_key: str | None = None
-    groq_api_key: str | None = None
-    together_api_key: str | None = None
+    # ── LLM Provider Keys (mirrors RealDataAgentBench provider support) ─────
+    anthropic_api_key: str | None = None   # Claude Sonnet 4.6, Opus 4.6, Haiku 4.5
+    openai_api_key: str | None = None      # GPT-5, GPT-4.1, GPT-4o, GPT-4o-mini
+    groq_api_key: str | None = None        # Llama 3.3-70B, Mixtral 8x7B
+    xai_api_key: str | None = None         # Grok-3, Grok-3-mini, Grok-3-fast
+    gemini_api_key: str | None = None      # Gemini 2.5 Pro/Flash
 
     # ── Evaluation ───────────────────────────────────────────────────────────
     eval_max_rows: int = 500
@@ -61,18 +61,37 @@ class Settings(BaseSettings):
 
     @property
     def available_providers(self) -> list[str]:
+        """Return provider names that have API keys configured."""
         providers = []
-        if self.openai_api_key:
-            providers.append("openai")
         if self.anthropic_api_key:
             providers.append("anthropic")
-        if self.google_api_key:
-            providers.append("google")
+        if self.openai_api_key:
+            providers.append("openai")
         if self.groq_api_key:
             providers.append("groq")
-        if self.together_api_key:
-            providers.append("together")
+        if self.xai_api_key:
+            providers.append("xai")
+        if self.gemini_api_key:
+            providers.append("google")
         return providers
+
+    def rdab_env_dict(self) -> dict[str, str]:
+        """
+        Return a dict of env vars to inject when calling RealDataAgentBench.
+        RDAB reads these directly from the environment.
+        """
+        env: dict[str, str] = {}
+        if self.anthropic_api_key:
+            env["ANTHROPIC_API_KEY"] = self.anthropic_api_key
+        if self.openai_api_key:
+            env["OPENAI_API_KEY"] = self.openai_api_key
+        if self.groq_api_key:
+            env["GROQ_API_KEY"] = self.groq_api_key
+        if self.xai_api_key:
+            env["XAI_API_KEY"] = self.xai_api_key
+        if self.gemini_api_key:
+            env["GEMINI_API_KEY"] = self.gemini_api_key
+        return env
 
     def ensure_upload_dir(self) -> None:
         os.makedirs(self.upload_dir, exist_ok=True)

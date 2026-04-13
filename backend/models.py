@@ -16,9 +16,9 @@ class EvalStatus(str, Enum):
 
 
 class ModelTier(str, Enum):
-    PREMIUM = "premium"       # GPT-4o, Claude 3.5 Sonnet
-    BALANCED = "balanced"     # GPT-4o-mini, Claude 3 Haiku
-    ECONOMY = "economy"       # Groq, Together AI
+    PREMIUM = "premium"
+    BALANCED = "balanced"
+    ECONOMY = "economy"
 
 
 class DatasetStats(BaseModel):
@@ -28,7 +28,22 @@ class DatasetStats(BaseModel):
     dtypes: dict[str, str]
     missing_pct: float = Field(ge=0, le=100)
     file_size_kb: float
-    file_format: str  # csv | parquet
+    file_format: str  # CSV | PARQUET
+
+
+class RDABScoreCard(BaseModel):
+    """
+    Four-dimensional score from RealDataAgentBench evaluation.
+    Mirrors realdataagentbench.scoring.ScoreCard.
+    """
+    rdab_score: float = Field(ge=0, le=1, description="Composite RDAB score (weighted)")
+    correctness: float = Field(ge=0, le=1, description="Ground-truth accuracy (50% weight)")
+    code_quality: float = Field(ge=0, le=1, description="Code pattern quality (20% weight)")
+    efficiency: float = Field(ge=0, le=1, description="Token + step budget efficiency (15% weight)")
+    stat_validity: float = Field(ge=0, le=1, description="Statistical rigour (15% weight)")
+    token_count: int = Field(default=0, description="Total tokens consumed")
+    step_count: int = Field(default=0, description="Total agent steps taken")
+    simulated: bool = Field(default=False, description="True if no live API key was available")
 
 
 class ModelResult(BaseModel):
@@ -36,10 +51,13 @@ class ModelResult(BaseModel):
     provider: str
     display_name: str
     tier: ModelTier
+    # RDAB 4-dimensional scores
+    rdab_scorecard: RDABScoreCard
+    # Legacy scalar for backward compat (= rdab_scorecard.rdab_score)
     accuracy_score: float = Field(ge=0, le=1)
     latency_ms: float
-    input_cost_per_1k: float   # USD per 1K input tokens
-    output_cost_per_1k: float  # USD per 1K output tokens
+    input_cost_per_1k: float
+    output_cost_per_1k: float
     estimated_tokens_input: int
     estimated_tokens_output: int
     estimated_total_cost_usd: float
@@ -73,6 +91,7 @@ class HealthResponse(BaseModel):
     version: str
     available_providers: list[str]
     environment: str
+    rdab_available: bool = Field(default=False, description="Whether RDAB package is importable")
 
 
 class ErrorResponse(BaseModel):

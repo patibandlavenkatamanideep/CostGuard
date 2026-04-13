@@ -1,4 +1,4 @@
-"""Tests for the CostGuard evaluation engine."""
+"""Tests for the CostGuard evaluation engine — RDAB-powered."""
 
 from __future__ import annotations
 
@@ -23,14 +23,12 @@ from evaluation.token_counter import count_tokens, estimate_batch_tokens
 
 @pytest.fixture
 def sample_csv_bytes() -> bytes:
-    df = pd.DataFrame(
-        {
-            "id": range(100),
-            "name": [f"Item_{i}" for i in range(100)],
-            "value": [i * 1.5 for i in range(100)],
-            "category": [["A", "B", "C", "D"][i % 4] for i in range(100)],
-        }
-    )
+    df = pd.DataFrame({
+        "id": range(100),
+        "name": [f"Item_{i}" for i in range(100)],
+        "value": [i * 1.5 for i in range(100)],
+        "category": [["A", "B", "C", "D"][i % 4] for i in range(100)],
+    })
     return df.to_csv(index=False).encode()
 
 
@@ -44,13 +42,11 @@ def sample_parquet_bytes() -> bytes:
 
 @pytest.fixture
 def sample_df() -> pd.DataFrame:
-    return pd.DataFrame(
-        {
-            "revenue": [100, 200, 300, 400, 500],
-            "region": ["N", "S", "E", "W", "N"],
-            "active": [True, False, True, True, False],
-        }
-    )
+    return pd.DataFrame({
+        "revenue": [100, 200, 300, 400, 500],
+        "region": ["N", "S", "E", "W", "N"],
+        "active": [True, False, True, True, False],
+    })
 
 
 # ─── Data Loader Tests ───────────────────────────────────────────────────────
@@ -83,7 +79,6 @@ class TestDataLoader:
         assert 0 <= stats.missing_pct <= 100
 
     def test_sample_dataframe_small(self, sample_df):
-        # Smaller than max — return as-is
         result = sample_dataframe(sample_df, max_rows=100)
         assert len(result) == len(sample_df)
 
@@ -102,30 +97,57 @@ class TestDataLoader:
 
 class TestPricing:
     def test_all_models_present(self):
-        assert len(MODELS) >= 8
+        # We now have 15+ models including RDAB-supported ones
+        assert len(MODELS) >= 12
 
-    def test_get_model_known(self):
-        m = get_model("gpt-4o")
+    def test_rdab_default_model_present(self):
+        """claude-sonnet-4-6 is RDAB's default model."""
+        m = get_model("claude-sonnet-4-6")
         assert m is not None
-        assert m.provider == "openai"
+        assert m.rdab_alias == "sonnet"
+
+    def test_gpt41_present(self):
+        """GPT-4.1 is RDAB's cost-performance leader."""
+        m = get_model("gpt-4.1")
+        assert m is not None
+        assert m.rdab_alias == "gpt4.1"
+
+    def test_gemini_flash_cheapest(self):
+        """Gemini 2.5 Flash is the cheapest model per RDAB findings."""
+        m = get_model("gemini-2.5-flash")
+        assert m is not None
+        all_costs = [model.input_per_1k for model in MODELS.values()]
+        assert m.input_per_1k == min(all_costs)
+
+    def test_all_models_have_rdab_alias(self):
+        for model_id, m in MODELS.items():
+            assert m.rdab_alias, f"Model {model_id} missing rdab_alias"
 
     def test_get_model_unknown(self):
         assert get_model("nonexistent-model-xyz") is None
 
     def test_cost_estimate(self):
-        m = get_model("gpt-4o-mini")
+        m = get_model("gpt-4.1-mini")
         assert m is not None
         cost = m.estimate_cost(1000, 200)
         assert cost > 0
-        assert cost < 1.0  # Should be sub-dollar for this volume
+        assert cost < 0.01  # Should be very cheap
 
-    def test_get_models_for_providers(self):
+    def test_get_models_for_providers_openai(self):
         openai_models = get_models_for_providers(["openai"])
         assert all(m.provider == "openai" for m in openai_models)
+
+    def test_get_models_for_providers_anthropic(self):
+        models = get_models_for_providers(["anthropic"])
+        assert all(m.provider == "anthropic" for m in models)
 
     def test_get_models_no_providers_returns_all(self):
         all_models = get_models_for_providers([])
         assert len(all_models) == len(MODELS)
+
+    def test_all_providers_covered(self):
+        providers = {m.provider for m in MODELS.values()}
+        assert providers == {"anthropic", "openai", "groq", "xai", "google"}
 
 
 # ─── Question Generator Tests ────────────────────────────────────────────────
@@ -172,6 +194,72 @@ class TestTokenCounter:
         assert out > 0
 
 
+# ─── RDAB Simulation Tests ───────────────────────────────────────────────────
+
+class TestRDABSimulation:
+    """Tests for the deterministic simulation fallback (no API keys needed)."""
+
+    def test_simulation_returns_scorecard(self):
+        from evaluation.engine import _simulate_scorecard
+        pricing = get_model("gpt-4.1")
+        assert pricing is not None
+        sc, latency = _simulate_scorecard(pricing)
+        assert 0 <= sc.rdab_score <= 1
+        assert sc.simulated is True
+        assert latency > 0
+
+    def test_simulation_deterministic(self):
+        from evaluation.engine import _simulate_scorecard
+        pricing = get_model("claude-sonnet-4-6")
+        assert pricing is not None
+        sc1, _ = _simulate_scorecard(pricing, seed=42)
+        sc2, _ = _simulate_scorecard(pricing, seed=42)
+        assert sc1.rdab_score == sc2.rdab_score
+
+    def test_premium_beats_economy_on_correctness(self):
+        """Premium models should score higher on correctness than economy."""
+        from evaluation.engine import _simulate_scorecard
+        premium = get_model("gpt-4.1")
+        economy = get_model("gemini-2.5-flash")
+        assert premium and economy
+        sc_p, _ = _simulate_scorecard(premium)
+        sc_e, _ = _simulate_scorecard(economy)
+        assert sc_p.correctness > sc_e.correctness
+
+    def test_economy_better_efficiency(self):
+        """Economy models should use fewer tokens → higher efficiency score."""
+        from evaluation.engine import _simulate_scorecard
+        premium = get_model("claude-sonnet-4-6")
+        economy = get_model("claude-haiku-4-5-20251001")
+        assert premium and economy
+        sc_p, _ = _simulate_scorecard(premium)
+        sc_e, _ = _simulate_scorecard(economy)
+        assert sc_e.efficiency > sc_p.efficiency
+
+    def test_stat_validity_universally_low(self):
+        """RDAB finding: all models score ~0.25 on stat_validity."""
+        from evaluation.engine import _simulate_scorecard
+        for model_id in ["gpt-4.1", "claude-sonnet-4-6", "gemini-2.5-flash"]:
+            pricing = get_model(model_id)
+            assert pricing is not None
+            sc, _ = _simulate_scorecard(pricing)
+            assert sc.stat_validity < 0.45, (
+                f"{model_id} stat_validity={sc.stat_validity:.3f} exceeds expected cap"
+            )
+
+    def test_all_models_get_valid_scores(self):
+        """Every model in the catalogue should produce valid simulation scores."""
+        from evaluation.engine import _simulate_scorecard
+        for model_id, pricing in MODELS.items():
+            sc, latency = _simulate_scorecard(pricing)
+            assert 0 <= sc.rdab_score <= 1, f"{model_id} rdab_score out of range"
+            assert 0 <= sc.correctness <= 1
+            assert 0 <= sc.code_quality <= 1
+            assert 0 <= sc.efficiency <= 1
+            assert 0 <= sc.stat_validity <= 1
+            assert latency > 0
+
+
 # ─── API Integration Tests (require running server) ──────────────────────────
 
 @pytest.mark.integration
@@ -181,8 +269,7 @@ class TestAPIIntegration:
     @pytest.fixture(autouse=True)
     def client(self):
         import httpx
-
-        self.client = httpx.Client(base_url="http://localhost:8000", timeout=30)
+        self.client = httpx.Client(base_url="http://localhost:8000", timeout=60)
         yield
         self.client.close()
 
@@ -191,14 +278,27 @@ class TestAPIIntegration:
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "ok"
+        assert "rdab_available" in body
 
-    def test_evaluate_csv(self, sample_csv_bytes):
+    def test_models_endpoint(self):
+        resp = self.client.get("/models")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] >= 12
+
+    def test_evaluate_csv_returns_rdab_scores(self, sample_csv_bytes):
         resp = self.client.post(
             "/evaluate",
             files={"file": ("test.csv", sample_csv_bytes, "text/csv")},
-            data={"task_description": "Test", "num_questions": "3"},
+            data={"task_description": "Test RDAB scoring", "num_questions": "3"},
         )
         assert resp.status_code == 200
         body = resp.json()
         assert "recommended_model" in body
-        assert len(body["results"]) > 0
+        rec = body["recommended_model"]
+        sc = rec["rdab_scorecard"]
+        assert 0 <= sc["rdab_score"] <= 1
+        assert 0 <= sc["correctness"] <= 1
+        assert 0 <= sc["code_quality"] <= 1
+        assert 0 <= sc["efficiency"] <= 1
+        assert 0 <= sc["stat_validity"] <= 1

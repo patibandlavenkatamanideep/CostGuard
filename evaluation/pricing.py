@@ -1,7 +1,8 @@
 """
-LLM pricing catalogue — sourced from official provider pricing pages.
+LLM pricing catalogue — aligned with RealDataAgentBench provider support.
 Prices are in USD per 1,000 tokens (input / output).
-Updated: 2025-Q1. Update this file as prices change.
+Source: official provider pricing pages, April 2026.
+Update this file as prices change.
 """
 
 from __future__ import annotations
@@ -11,13 +12,14 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class ModelPricing:
-    model_id: str
-    provider: str
+    model_id: str           # Exact model ID used in API calls
+    rdab_alias: str         # Alias recognised by RealDataAgentBench
+    provider: str           # anthropic | openai | groq | xai | google
     display_name: str
-    tier: str                        # premium | balanced | economy
-    input_per_1k: float              # USD per 1K input tokens
-    output_per_1k: float             # USD per 1K output tokens
-    context_window: int              # max tokens
+    tier: str               # premium | balanced | economy
+    input_per_1k: float     # USD per 1K input tokens
+    output_per_1k: float    # USD per 1K output tokens
+    context_window: int
     strengths: list[str] = field(default_factory=list)
     limitations: list[str] = field(default_factory=list)
 
@@ -27,132 +29,233 @@ class ModelPricing:
         )
 
 
-# ─── Model Catalogue ─────────────────────────────────────────────────────────
+# ─── Model Catalogue (mirrors realdataagentbench/harness/pricing.py) ─────────
+# Prices converted from per-1M to per-1K for compatibility.
 MODELS: dict[str, ModelPricing] = {
-    # OpenAI
+
+    # ── Anthropic ────────────────────────────────────────────────────────────
+    "claude-sonnet-4-6": ModelPricing(
+        model_id="claude-sonnet-4-6",
+        rdab_alias="sonnet",
+        provider="anthropic",
+        display_name="Claude Sonnet 4.6",
+        tier="premium",
+        input_per_1k=0.003,       # $3.00 / 1M
+        output_per_1k=0.015,      # $15.00 / 1M
+        context_window=200_000,
+        strengths=["Best reasoning", "200K context", "Default RDAB model"],
+        limitations=["Higher cost", "Slower than Haiku"],
+    ),
+    "claude-opus-4-6": ModelPricing(
+        model_id="claude-opus-4-6",
+        rdab_alias="opus",
+        provider="anthropic",
+        display_name="Claude Opus 4.6",
+        tier="premium",
+        input_per_1k=0.015,       # $15.00 / 1M
+        output_per_1k=0.075,      # $75.00 / 1M
+        context_window=200_000,
+        strengths=["Highest Anthropic capability", "Complex reasoning"],
+        limitations=["Most expensive model", "Slower"],
+    ),
+    "claude-haiku-4-5-20251001": ModelPricing(
+        model_id="claude-haiku-4-5-20251001",
+        rdab_alias="haiku",
+        provider="anthropic",
+        display_name="Claude Haiku 4.5",
+        tier="economy",
+        input_per_1k=0.00025,     # $0.25 / 1M
+        output_per_1k=0.00125,    # $1.25 / 1M
+        context_window=200_000,
+        strengths=["Cheapest Anthropic", "Fast", "200K context"],
+        limitations=["Less capable for complex reasoning"],
+    ),
+
+    # ── OpenAI ───────────────────────────────────────────────────────────────
+    "gpt-4.1": ModelPricing(
+        model_id="gpt-4.1",
+        rdab_alias="gpt4.1",
+        provider="openai",
+        display_name="GPT-4.1",
+        tier="premium",
+        input_per_1k=0.002,       # $2.00 / 1M
+        output_per_1k=0.008,      # $8.00 / 1M
+        context_window=1_000_000,
+        strengths=["Best cost-performance (RDAB benchmark)", "1M context"],
+        limitations=["New model, less battle-tested"],
+    ),
+    "gpt-4.1-mini": ModelPricing(
+        model_id="gpt-4.1-mini",
+        rdab_alias="gpt4.1-mini",
+        provider="openai",
+        display_name="GPT-4.1 mini",
+        tier="balanced",
+        input_per_1k=0.0004,      # $0.40 / 1M
+        output_per_1k=0.0016,     # $1.60 / 1M
+        context_window=1_000_000,
+        strengths=["Very fast", "1M context", "Low cost"],
+        limitations=["Less reasoning depth vs GPT-4.1"],
+    ),
+    "gpt-4.1-nano": ModelPricing(
+        model_id="gpt-4.1-nano",
+        rdab_alias="gpt4.1-nano",
+        provider="openai",
+        display_name="GPT-4.1 nano",
+        tier="economy",
+        input_per_1k=0.0001,      # $0.10 / 1M
+        output_per_1k=0.0004,     # $0.40 / 1M
+        context_window=1_000_000,
+        strengths=["Ultra-cheap", "Fast", "1M context"],
+        limitations=["Weakest OpenAI option"],
+    ),
     "gpt-4o": ModelPricing(
         model_id="gpt-4o",
+        rdab_alias="gpt4o",
         provider="openai",
         display_name="GPT-4o",
         tier="premium",
-        input_per_1k=0.0025,
-        output_per_1k=0.010,
+        input_per_1k=0.0025,      # $2.50 / 1M
+        output_per_1k=0.010,      # $10.00 / 1M
         context_window=128_000,
-        strengths=["Best reasoning", "Code generation", "Multi-modal"],
-        limitations=["Higher cost", "Slower than mini"],
+        strengths=["Proven reliability", "Multi-modal"],
+        limitations=["Smaller context than GPT-4.1"],
     ),
     "gpt-4o-mini": ModelPricing(
         model_id="gpt-4o-mini",
+        rdab_alias="gpt4o-mini",
         provider="openai",
         display_name="GPT-4o mini",
         tier="balanced",
-        input_per_1k=0.000150,
-        output_per_1k=0.000600,
+        input_per_1k=0.000150,    # $0.15 / 1M
+        output_per_1k=0.000600,   # $0.60 / 1M
         context_window=128_000,
-        strengths=["Fast", "Very cheap", "Good for structured output"],
-        limitations=["Less reasoning depth", "Weaker at complex tasks"],
+        strengths=["Very cheap", "Good structured output"],
+        limitations=["Smaller context vs GPT-4.1 family"],
     ),
-    "gpt-3.5-turbo": ModelPricing(
-        model_id="gpt-3.5-turbo",
+    "gpt-5": ModelPricing(
+        model_id="gpt-5",
+        rdab_alias="gpt5",
         provider="openai",
-        display_name="GPT-3.5 Turbo",
-        tier="economy",
-        input_per_1k=0.0005,
-        output_per_1k=0.0015,
-        context_window=16_385,
-        strengths=["Very cheap", "Fast"],
-        limitations=["Outdated", "Weaker instruction following", "Small context"],
-    ),
-    # Anthropic
-    "claude-3-5-sonnet-20241022": ModelPricing(
-        model_id="claude-3-5-sonnet-20241022",
-        provider="anthropic",
-        display_name="Claude 3.5 Sonnet",
+        display_name="GPT-5",
         tier="premium",
-        input_per_1k=0.003,
-        output_per_1k=0.015,
-        context_window=200_000,
-        strengths=["Excellent reasoning", "200K context", "Data analysis"],
-        limitations=["Higher cost", "Anthropic-only"],
+        input_per_1k=0.015,       # $15.00 / 1M
+        output_per_1k=0.060,      # $60.00 / 1M
+        context_window=128_000,
+        strengths=["Highest OpenAI capability"],
+        limitations=["Most expensive OpenAI", "~16× cost of GPT-4.1 for similar quality"],
     ),
-    "claude-3-5-haiku-20241022": ModelPricing(
-        model_id="claude-3-5-haiku-20241022",
-        provider="anthropic",
-        display_name="Claude 3.5 Haiku",
-        tier="balanced",
-        input_per_1k=0.0008,
-        output_per_1k=0.004,
-        context_window=200_000,
-        strengths=["Fast", "Cheap", "Large context"],
-        limitations=["Less powerful than Sonnet"],
-    ),
-    "claude-3-haiku-20240307": ModelPricing(
-        model_id="claude-3-haiku-20240307",
-        provider="anthropic",
-        display_name="Claude 3 Haiku",
-        tier="economy",
-        input_per_1k=0.00025,
-        output_per_1k=0.00125,
-        context_window=200_000,
-        strengths=["Cheapest Anthropic", "Fast", "Large context"],
-        limitations=["Older model", "Less capable"],
-    ),
-    # Google
-    "gemini-1.5-pro": ModelPricing(
-        model_id="gemini-1.5-pro",
+
+    # ── Google Gemini ─────────────────────────────────────────────────────────
+    "gemini-2.5-pro": ModelPricing(
+        model_id="gemini-2.5-pro",
+        rdab_alias="gemini-pro",
         provider="google",
-        display_name="Gemini 1.5 Pro",
+        display_name="Gemini 2.5 Pro",
         tier="premium",
-        input_per_1k=0.00125,
-        output_per_1k=0.005,
+        input_per_1k=0.00125,     # $1.25 / 1M
+        output_per_1k=0.005,      # $5.00 / 1M
         context_window=2_000_000,
-        strengths=["2M context window", "Multi-modal", "Competitive pricing"],
-        limitations=["Requires Google Cloud", "Variable quality"],
+        strengths=["2M context window", "Competitive pricing", "Strong reasoning"],
+        limitations=["Requires Google API key"],
     ),
-    "gemini-1.5-flash": ModelPricing(
-        model_id="gemini-1.5-flash",
+    "gemini-2.5-flash": ModelPricing(
+        model_id="gemini-2.5-flash",
+        rdab_alias="gemini-flash",
         provider="google",
-        display_name="Gemini 1.5 Flash",
-        tier="balanced",
-        input_per_1k=0.000075,
-        output_per_1k=0.0003,
+        display_name="Gemini 2.5 Flash",
+        tier="economy",
+        input_per_1k=0.000075,    # $0.075 / 1M — cheapest overall
+        output_per_1k=0.0003,     # $0.30 / 1M
         context_window=1_000_000,
-        strengths=["Extremely cheap", "1M context", "Fast"],
+        strengths=["Cheapest model overall", "Best cost-per-RDAB-score", "1M context"],
         limitations=["Less reasoning depth"],
     ),
-    # Groq (ultra-fast inference)
+
+    # ── Groq (ultra-fast inference) ───────────────────────────────────────────
+    "llama-3.3-70b-versatile": ModelPricing(
+        model_id="llama-3.3-70b-versatile",
+        rdab_alias="llama",
+        provider="groq",
+        display_name="Llama 3.3 70B (Groq)",
+        tier="balanced",
+        input_per_1k=0.00059,     # $0.59 / 1M
+        output_per_1k=0.00079,    # $0.79 / 1M
+        context_window=128_000,
+        strengths=["Ultra-fast (Groq)", "Outperforms on modeling tasks (RDAB)", "Open-source"],
+        limitations=["Groq rate limits", "Variable on complex reasoning"],
+    ),
     "llama-3.1-70b-versatile": ModelPricing(
         model_id="llama-3.1-70b-versatile",
+        rdab_alias="llama-70b",
         provider="groq",
         display_name="Llama 3.1 70B (Groq)",
-        tier="economy",
+        tier="balanced",
         input_per_1k=0.00059,
         output_per_1k=0.00079,
         context_window=128_000,
-        strengths=["Ultra-fast (Groq)", "Open-source", "Good value"],
-        limitations=["Variable quality", "Groq rate limits"],
+        strengths=["Fast", "Open-source", "Cheap"],
+        limitations=["Older than Llama 3.3"],
     ),
     "mixtral-8x7b-32768": ModelPricing(
         model_id="mixtral-8x7b-32768",
+        rdab_alias="mixtral",
         provider="groq",
         display_name="Mixtral 8x7B (Groq)",
         tier="economy",
-        input_per_1k=0.00024,
+        input_per_1k=0.00024,     # $0.24 / 1M
         output_per_1k=0.00024,
         context_window=32_768,
-        strengths=["Cheapest option", "Fast MoE architecture"],
-        limitations=["Older model", "Smaller context"],
+        strengths=["Second cheapest option", "MoE architecture"],
+        limitations=["Smaller context", "Older model"],
+    ),
+
+    # ── xAI Grok ─────────────────────────────────────────────────────────────
+    "grok-3": ModelPricing(
+        model_id="grok-3",
+        rdab_alias="grok",
+        provider="xai",
+        display_name="Grok-3",
+        tier="premium",
+        input_per_1k=0.003,       # $3.00 / 1M
+        output_per_1k=0.015,      # $15.00 / 1M
+        context_window=131_072,
+        strengths=["Strong reasoning", "Real-time knowledge"],
+        limitations=["Weak on sklearn tasks (RDAB finding)", "xAI API only"],
+    ),
+    "grok-3-mini": ModelPricing(
+        model_id="grok-3-mini",
+        rdab_alias="grok-mini",
+        provider="xai",
+        display_name="Grok-3 mini",
+        tier="balanced",
+        input_per_1k=0.0003,      # $0.30 / 1M
+        output_per_1k=0.0005,     # $0.50 / 1M
+        context_window=131_072,
+        strengths=["Fast", "Cheap", "Real-time knowledge"],
+        limitations=["Less capable than Grok-3", "sklearn blind spot"],
     ),
 }
 
 
 def get_models_for_providers(providers: list[str]) -> list[ModelPricing]:
-    """Return models available given a list of configured provider names."""
+    """
+    Return models available given a list of configured provider names.
+    If providers is empty, returns all models (for demo/display).
+    """
     if not providers:
-        # Return all models for demo/display purposes
         return list(MODELS.values())
     return [m for m in MODELS.values() if m.provider in providers]
 
 
 def get_model(model_id: str) -> ModelPricing | None:
     return MODELS.get(model_id)
+
+
+# Provider-to-canonical-env-var mapping (matches RDAB conventions)
+PROVIDER_ENV_VARS: dict[str, str] = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "groq": "GROQ_API_KEY",
+    "xai": "XAI_API_KEY",
+    "google": "GEMINI_API_KEY",
+}

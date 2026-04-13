@@ -37,6 +37,15 @@ dependencies = [
     "plotly>=5.24.0",
     "aiofiles>=24.1.0",
     "rich>=13.9.0",
+    # RealDataAgentBench — evaluation engine
+    "realdataagentbench @ git+https://github.com/patibandlavenkatamanideep/RealDataAgentBench.git",
+    # Additional providers supported by RDAB
+    "google-generativeai>=0.8.0",
+    "groq>=0.11.0",
+    "scipy>=1.13.0",
+    "scikit-learn>=1.5.0",
+    "RestrictedPython>=7.0",
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]

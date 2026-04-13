@@ -2,21 +2,22 @@
 
 > **Instantly find the best LLM for your data — with exact cost estimates.**
 
-[![CI/CD](https://github.com/your-org/costguard/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/costguard/actions)
+[![CI/CD](https://github.com/patibandlavenkatamanideep/CostGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/patibandlavenkatamanideep/CostGuard/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Powered by RDAB](https://img.shields.io/badge/Evaluation-RealDataAgentBench-7c3aed)](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Try%20Now-brightgreen)](https://costguard.up.railway.app)
 
 ---
 
 ## What is CostGuard?
 
-Upload any CSV or Parquet file → CostGuard benchmarks **8+ major LLMs** against your actual data and returns:
+Upload any CSV or Parquet file → CostGuard benchmarks **14 major LLMs** against your actual data using **[RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)** as the evaluation engine, and returns:
 
--  **Best model recommendation** with confidence reasoning
+-  **Best model recommendation** with 4-dimensional RDAB scoring
 -  **Exact cost estimate** per run (down to $0.000001)
 -  **One-click copyable config** — paste directly into your project
--  **Interactive charts** comparing accuracy, latency, and cost across all models
+-  **Radar chart** comparing Correctness · Code Quality · Efficiency · Stat Validity
 
 No account required. No data stored. Works in under 15 seconds.
 
@@ -36,41 +37,52 @@ graph TB
     ST -->|POST /evaluate| API[FastAPI Backend<br/>:8000]
 
     API --> DL[Data Loader<br/>CSV · Parquet · Validation]
-    DL --> QG[Question Generator<br/>RealDataAgentBench-style]
-    QG --> EE[Evaluation Engine<br/>Parallel model calls]
+    DL --> QG[Question Generator<br/>Auto-generates from schema]
+    QG --> EE[CostGuard Engine<br/>Parallel model evaluation]
 
-    EE --> OAI[OpenAI<br/>GPT-4o · mini · 3.5T]
-    EE --> ANT[Anthropic<br/>Claude 3.5 Sonnet · Haiku]
-    EE --> GGL[Google<br/>Gemini 1.5 Pro · Flash]
-    EE --> GRQ[Groq<br/>Llama 3.1 · Mixtral]
+    EE -->|Dynamic TaskSchema| RDAB[RealDataAgentBench<br/>harness.Agent + CompositeScorer]
 
-    EE --> SC[Scorer<br/>Accuracy · Latency · Cost]
-    SC --> RK[Ranker<br/>Composite Score]
+    RDAB --> OAI[OpenAI<br/>GPT-5 · 4.1 · 4o]
+    RDAB --> ANT[Anthropic<br/>Claude Sonnet · Haiku]
+    RDAB --> GGL[Google<br/>Gemini 2.5 Pro · Flash]
+    RDAB --> GRQ[Groq<br/>Llama 3.3 · Mixtral]
+    RDAB --> XAI[xAI<br/>Grok-3 · Grok-3 mini]
+
+    RDAB --> SC[RDAB CompositeScorer<br/>Correctness · Code · Efficiency · StatVal]
+    SC --> RK[Ranker<br/>60% RDAB + 40% Cost]
     RK -->|EvalResponse| API
     API -->|JSON| ST
-    ST -->|Results + Charts + Config| User
+    ST -->|Radar + Scatter + Table + Config| User
 
     style ST fill:#667eea,color:#fff
     style API fill:#764ba2,color:#fff
-    style EE fill:#11998e,color:#fff
+    style RDAB fill:#11998e,color:#fff
+    style EE fill:#059669,color:#fff
 ```
 
 ---
 
 ## Supported Models
 
-| Model | Provider | Tier | Input $/1K | Output $/1K |
-|-------|----------|------|-----------|------------|
-| GPT-4o | OpenAI | Premium | $0.0025 | $0.010 |
-| GPT-4o mini | OpenAI | Balanced | $0.00015 | $0.00060 |
-| GPT-3.5 Turbo | OpenAI | Economy | $0.0005 | $0.0015 |
-| Claude 3.5 Sonnet | Anthropic | Premium | $0.003 | $0.015 |
-| Claude 3.5 Haiku | Anthropic | Balanced | $0.0008 | $0.004 |
-| Claude 3 Haiku | Anthropic | Economy | $0.00025 | $0.00125 |
-| Gemini 1.5 Pro | Google | Premium | $0.00125 | $0.005 |
-| Gemini 1.5 Flash | Google | Balanced | $0.000075 | $0.0003 |
-| Llama 3.1 70B (Groq) | Groq | Economy | $0.00059 | $0.00079 |
-| Mixtral 8x7B (Groq) | Groq | Economy | $0.00024 | $0.00024 |
+All 5 providers natively supported by RealDataAgentBench.
+
+| Model | Provider | Tier | Input $/1K | RDAB Note |
+|-------|----------|------|-----------|-----------|
+| Claude Sonnet 4.6 | Anthropic | Premium | $0.003 | RDAB default model |
+| Claude Opus 4.6 | Anthropic | Premium | $0.015 | Highest capability |
+| Claude Haiku 4.5 | Anthropic | Economy | $0.00025 | Token-inefficient (RDAB finding) |
+| **GPT-4.1** | OpenAI | Premium | **$0.002** | **RDAB cost-performance leader** |
+| GPT-4.1 mini | OpenAI | Balanced | $0.0004 | Fast, 1M context |
+| GPT-4.1 nano | OpenAI | Economy | $0.0001 | Ultra-cheap |
+| GPT-4o | OpenAI | Premium | $0.0025 | Proven reliability |
+| GPT-4o mini | OpenAI | Balanced | $0.00015 | Structured output |
+| GPT-5 | OpenAI | Premium | $0.015 | Max capability, 16× GPT-4.1 cost |
+| **Gemini 2.5 Flash** | Google | Economy | **$0.000075** | **Cheapest overall** |
+| Gemini 2.5 Pro | Google | Premium | $0.00125 | 2M context |
+| Llama 3.3 70B (Groq) | Groq | Balanced | $0.00059 | Best on modeling tasks (RDAB) |
+| Mixtral 8x7B (Groq) | Groq | Economy | $0.00024 | Ultra-fast MoE |
+| Grok-3 | xAI | Premium | $0.003 | sklearn blind spot (RDAB finding) |
+| Grok-3 mini | xAI | Balanced | $0.0003 | Fast, cheap |
 
 ---
 
@@ -172,6 +184,24 @@ curl http://localhost:8000/models
 ```
 
 ---
+
+## RDAB Scoring Methodology
+
+CostGuard uses [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) as its evaluation engine, scoring each model across **4 dimensions**:
+
+| Dimension | Weight | What It Measures |
+|-----------|--------|-----------------|
+| **Correctness** | 50% | Answer accuracy vs ground truth (fuzzy-matched, ±15% tolerance) |
+| **Code Quality** | 20% | Vectorised operations, naming conventions, no magic numbers |
+| **Efficiency** | 15% | Token + step budget adherence (Easy: 20K tokens, Medium: 50K) |
+| **Stat Validity** | 15% | Reports p-values, confidence intervals, avoids p-hacking |
+
+### Key RDAB Benchmark Findings (163 runs)
+- **GPT-4.1** = best cost-performance ratio ($0.038/task vs GPT-5's $0.596)
+- **Gemini 2.5 Flash** = best cost-per-RDAB-score (cheapest at $0.000075/1K input)
+- **Llama 3.3-70B (Groq)** = outperforms on modeling tasks
+- **Claude Haiku** = consumed 608K tokens vs GPT-4.1's 30K on same task
+- **Universal weakness**: All models score ~0.25 on stat_validity
 
 ## Project Structure
 

@@ -282,10 +282,24 @@ if result := st.session_state.get("result"):
 
     # ── Key metrics ───────────────────────────────────────────────────────
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Accuracy Score", f"{rec['accuracy_score']:.1%}")
+    sc = rec["rdab_scorecard"]
+    m1.metric("RDAB Score", f"{sc['rdab_score']:.1%}", help="RealDataAgentBench composite score")
     m2.metric("Avg Latency", f"{rec['latency_ms']:.0f} ms")
     m3.metric("Est. Cost / Run", _fmt_cost(rec["estimated_total_cost_usd"]))
     m4.metric("Eval Duration", f"{result['total_eval_duration_s']:.1f}s")
+
+    # ── RDAB 4-dimensional scorecard ─────────────────────────────────────
+    st.markdown("#### RDAB Score Breakdown")
+    sim_warn = " *(simulation — add API keys for live evaluation)*" if sc.get("simulated") else ""
+    st.caption(
+        f"Powered by RealDataAgentBench{sim_warn}. "
+        "Scoring: Correctness 50% · Code Quality 20% · Efficiency 15% · Stat Validity 15%"
+    )
+    d1, d2, d3, d4 = st.columns(4)
+    d1.metric("Correctness", f"{sc['correctness']:.1%}", help="Answer accuracy vs ground truth")
+    d2.metric("Code Quality", f"{sc['code_quality']:.1%}", help="Vectorisation, naming, magic numbers")
+    d3.metric("Efficiency", f"{sc['efficiency']:.1%}", help="Token + step budget adherence")
+    d4.metric("Stat Validity", f"{sc['stat_validity']:.1%}", help="Statistical rigour in answers")
 
     st.divider()
 
@@ -300,15 +314,28 @@ if result := st.session_state.get("result"):
 
     # ── Charts ────────────────────────────────────────────────────────────
     st.markdown("### Model Comparison")
-    tab1, tab2, tab3 = st.tabs(["Accuracy vs Cost", "Latency", "Detailed Table"])
+    tab1, tab2, tab3, tab4 = st.tabs(
+        ["RDAB Score vs Cost", "4-Dimensional Radar", "Latency", "Detailed Table"]
+    )
 
-    models_df = pd.DataFrame(result["results"])
+    # Flatten RDAB scorecard fields into the dataframe
+    results_raw = result["results"]
+    for r in results_raw:
+        sc_r = r.get("rdab_scorecard", {})
+        r["rdab_score"]    = sc_r.get("rdab_score", 0)
+        r["correctness"]   = sc_r.get("correctness", 0)
+        r["code_quality"]  = sc_r.get("code_quality", 0)
+        r["efficiency"]    = sc_r.get("efficiency", 0)
+        r["stat_validity"] = sc_r.get("stat_validity", 0)
+        r["simulated"]     = sc_r.get("simulated", True)
+
+    models_df = pd.DataFrame(results_raw)
 
     with tab1:
         fig = px.scatter(
             models_df,
             x="estimated_total_cost_usd",
-            y="accuracy_score",
+            y="rdab_score",
             text="display_name",
             color="tier",
             size=[30] * len(models_df),
@@ -319,14 +346,14 @@ if result := st.session_state.get("result"):
             },
             labels={
                 "estimated_total_cost_usd": "Estimated Cost (USD)",
-                "accuracy_score": "Accuracy Score",
+                "rdab_score": "RDAB Composite Score",
             },
-            title="Accuracy vs Cost — top-left is best",
+            title="RDAB Score vs Cost — top-left is best",
         )
         fig.update_traces(textposition="top center")
         fig.add_annotation(
             x=rec["estimated_total_cost_usd"],
-            y=rec["accuracy_score"],
+            y=rec["rdab_scorecard"]["rdab_score"],
             text=" Recommended",
             showarrow=True,
             arrowhead=2,
@@ -336,6 +363,35 @@ if result := st.session_state.get("result"):
         st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
+        # Radar chart for top 5 models
+        top5 = models_df.nlargest(5, "rdab_score")
+        categories = ["Correctness", "Code Quality", "Efficiency", "Stat Validity"]
+        radar_fig = go.Figure()
+        colors = ["#7c3aed", "#2563eb", "#059669", "#d97706", "#dc2626"]
+        for i, (_, row) in enumerate(top5.iterrows()):
+            vals = [row["correctness"], row["code_quality"], row["efficiency"], row["stat_validity"]]
+            vals_closed = vals + [vals[0]]
+            radar_fig.add_trace(go.Scatterpolar(
+                r=vals_closed,
+                theta=categories + [categories[0]],
+                fill="toself",
+                name=row["display_name"],
+                line_color=colors[i % len(colors)],
+                opacity=0.75,
+            ))
+        radar_fig.update_layout(
+            polar={"radialaxis": {"visible": True, "range": [0, 1]}},
+            showlegend=True,
+            title="RDAB 4-Dimensional Score — Top 5 Models",
+            height=480,
+        )
+        st.plotly_chart(radar_fig, use_container_width=True)
+        st.caption(
+            "Universal stat_validity weakness (~0.25) is a known RDAB finding — "
+            "no model consistently reports uncertainty correctly."
+        )
+
+    with tab3:
         fig2 = px.bar(
             models_df.sort_values("latency_ms"),
             x="display_name",
@@ -352,30 +408,21 @@ if result := st.session_state.get("result"):
         fig2.update_layout(height=400)
         st.plotly_chart(fig2, use_container_width=True)
 
-    with tab3:
-        display_df = models_df[
-            [
-                "display_name",
-                "provider",
-                "tier",
-                "accuracy_score",
-                "latency_ms",
-                "estimated_total_cost_usd",
-                "input_cost_per_1k",
-                "output_cost_per_1k",
-            ]
-        ].copy()
+    with tab4:
+        display_df = models_df[[
+            "display_name", "provider", "tier",
+            "rdab_score", "correctness", "code_quality", "efficiency", "stat_validity",
+            "latency_ms", "estimated_total_cost_usd",
+            "input_cost_per_1k", "output_cost_per_1k",
+        ]].copy()
         display_df.columns = [
-            "Model",
-            "Provider",
-            "Tier",
-            "Accuracy",
-            "Latency (ms)",
-            "Cost / Run ($)",
-            "Input $/1K",
-            "Output $/1K",
+            "Model", "Provider", "Tier",
+            "RDAB Score", "Correctness", "Code Quality", "Efficiency", "Stat Validity",
+            "Latency (ms)", "Cost / Run ($)",
+            "Input $/1K", "Output $/1K",
         ]
-        display_df["Accuracy"] = display_df["Accuracy"].map("{:.1%}".format)
+        for col in ["RDAB Score", "Correctness", "Code Quality", "Efficiency", "Stat Validity"]:
+            display_df[col] = display_df[col].map("{:.1%}".format)
         display_df["Latency (ms)"] = display_df["Latency (ms)"].map("{:.0f}".format)
         display_df["Cost / Run ($)"] = display_df["Cost / Run ($)"].map("{:.6f}".format)
         st.dataframe(display_df, use_container_width=True, hide_index=True)
@@ -395,7 +442,6 @@ if result := st.session_state.get("result"):
         st.markdown("<br><br>", unsafe_allow_html=True)
         if st.button("Copy Config"):
             st.toast("Config copied to clipboard!", icon="")
-            # Inject JS clipboard copy
             st.markdown(
                 f"""<script>
                 navigator.clipboard.writeText({json.dumps(config_text)});
@@ -427,7 +473,7 @@ st.markdown(
     """
 <div style="text-align:center; color:#718096; font-size:0.85rem;">
     Built with FastAPI + Streamlit ·
-    <a href="https://github.com/your-org/costguard" target="_blank">GitHub</a> ·
+    <a href="https://github.com/patibandlavenkatamanideep/CostGuard" target="_blank">GitHub</a> ·
     <a href="http://localhost:8000/docs" target="_blank">API Docs</a>
 </div>
 """,
