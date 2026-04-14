@@ -444,6 +444,8 @@ st.markdown("""
     <span class="hero-pill">4-Dimensional RDAB Scoring</span>
     <span class="hero-pill">No Sign-up</span>
     <span class="hero-pill">Simulation Mode — No API Keys Needed</span>
+    <span class="hero-pill">🔒 Data processed in memory — never stored</span>
+    <span class="hero-pill">🐳 Self-host with Docker in one command</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -494,6 +496,11 @@ with col_how:
   </div>
 </div>
 """, unsafe_allow_html=True)
+    st.caption(
+        "⏱ **Simulation mode:** ~5–15 seconds  ·  "
+        "**Live mode (with API keys):** 1–3 minutes  \n"
+        "🔒 Your file is processed in memory and never written to disk or stored."
+    )
 
 
 # ─── Active file + run button ─────────────────────────────────────────────────
@@ -509,7 +516,11 @@ if active_file:
     size_str = f"{size_kb / 1024:.1f} MB" if size_kb > 1024 else f"{size_kb:.1f} KB"
     st.caption(f"📄 **{filename}** — {size_str}")
 
-    mode_label = "Running live benchmark across 15 models…" if any_key else "Running simulation benchmark across 15 models…"
+    mode_label = (
+        "Running live benchmark across 15 models — this takes 1–3 minutes…"
+        if any_key
+        else "Running simulation benchmark across 15 models — usually under 15 seconds…"
+    )
     if st.button("⚡  Analyze & Recommend", type="primary", use_container_width=True):
         with st.spinner(mode_label):
             try:
@@ -748,6 +759,13 @@ if result := st.session_state.get("result"):
         st.plotly_chart(fig2, use_container_width=True)
 
     with tab4:
+        st.info(
+            "**Note on scores:** Some models may have completed fewer evaluation questions than others "
+            "(e.g. due to API rate limits or missing keys in Simulation mode). "
+            "Scores for those models are preliminary and marked as simulated. "
+            "Provide API keys for Live Mode to get full benchmark runs.",
+            icon="ℹ️",
+        )
         tbl = df_models[[
             "display_name", "provider", "tier",
             "rdab_score", "correctness", "code_quality", "efficiency", "stat_validity",
