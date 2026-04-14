@@ -31,26 +31,37 @@ class DataLoadError(Exception):
 
 def _read_csv_robust(file_obj: io.IOBase, filename: str) -> pd.DataFrame:
     """
-    Read a CSV tolerating the three most common real-world problems:
+    Read a CSV tolerating the four most common real-world problems:
     1. Non-UTF-8 encoding  (BX-Books, European datasets)
-    2. Bad / extra fields  (C error: Expected N fields, saw M)
-    3. BOM prefix on first column name
-    Tries encodings in order; skips malformed lines with a logged warning.
+    2. Non-comma separator (BX-Books uses ';', some exports use tab/pipe)
+    3. Bad / extra fields  (C error: Expected N fields, saw M)
+    4. BOM prefix on first column name
+
+    Strategy:
+    - Read the raw bytes once so seek() is never needed.
+    - Try (encoding, sep) pairs; sep=None lets pandas sniff the delimiter.
+    - Guarantee success via a final latin-1 + errors='replace' fallback that
+      cannot raise UnicodeDecodeError on any byte sequence.
     """
-    encodings = ("utf-8", "latin-1", "cp1252", "utf-8-sig")
+    file_obj.seek(0)
+    raw: bytes = file_obj.read()
+
+    # Encodings to try in order.  latin-1 maps every byte 0x00-0xFF so it
+    # should always succeed at decoding; it's listed early to catch latin/cp
+    # files before the BOM-aware utf-8-sig pass.
+    encodings = ("utf-8-sig", "utf-8", "latin-1", "cp1252")
     last_exc: Exception | None = None
 
     for encoding in encodings:
         try:
-            file_obj.seek(0)
             df = pd.read_csv(
-                file_obj,
+                io.BytesIO(raw),
                 encoding=encoding,
+                sep=None,              # auto-sniff: comma, semicolon, tab, pipe …
                 on_bad_lines="skip",   # skip rows with wrong field count
-                engine="python",       # more lenient than the C engine
+                engine="python",       # required for sep=None and more lenient overall
             )
-            skipped = sum(1 for _ in [])  # placeholder — pandas logs internally
-            logger.info(f"Loaded '{filename}' with encoding={encoding}")
+            logger.info(f"Loaded '{filename}' with encoding={encoding}, sep=auto-sniffed")
             return df
         except UnicodeDecodeError as exc:
             last_exc = exc
@@ -59,8 +70,24 @@ def _read_csv_robust(file_obj: io.IOBase, filename: str) -> pd.DataFrame:
             last_exc = exc
             continue
 
+    # Final guaranteed fallback: latin-1 decodes every byte; 'replace' handles
+    # any residual codec error.  This path should be unreachable in practice.
+    try:
+        df = pd.read_csv(
+            io.BytesIO(raw),
+            encoding="latin-1",
+            encoding_errors="replace",
+            sep=None,
+            on_bad_lines="skip",
+            engine="python",
+        )
+        logger.warning(f"Loaded '{filename}' via encoding fallback (latin-1/replace)")
+        return df
+    except Exception as exc:
+        last_exc = exc
+
     raise DataLoadError(
-        f"Could not parse '{filename}' with encodings {encodings}. "
+        f"Could not parse '{filename}' with any encoding/separator combination. "
         f"Last error: {last_exc}"
     )
 
