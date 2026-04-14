@@ -56,6 +56,7 @@ from evaluation.data_loader import (
     load_bytes,
     sample_dataframe,
 )
+from evaluation.observability import log_evaluation
 from evaluation.pricing import ModelPricing, get_models_for_providers
 from evaluation.token_counter import estimate_batch_tokens
 
@@ -534,7 +535,7 @@ async def run_evaluation(
         f"cost=${recommended.estimated_total_cost_usd:.5f})"
     )
 
-    return {
+    response = {
         "eval_id": eval_id,
         "status": EvalStatus.COMPLETED,
         "eval_mode": eval_mode,
@@ -546,6 +547,15 @@ async def run_evaluation(
         "recommendation_reason": reason,
         "copyable_config": copyable_config,
     }
+
+    # ── Layer 4: log to observability store (non-blocking) ────────────────────
+    try:
+        serialisable = EvalResponse(**response).model_dump(mode="json")
+        log_evaluation(serialisable)
+    except Exception as _obs_err:
+        logger.warning(f"[{eval_id}] Observability logging skipped: {_obs_err}")
+
+    return response
 
 
 def _build_recommendation_reason(
