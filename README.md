@@ -6,17 +6,28 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Powered by RDAB](https://img.shields.io/badge/Evaluation-RealDataAgentBench-7c3aed)](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Try%20Now%20%E2%86%92-brightgreen)](https://costguard.up.railway.app)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Try%20Now%20%E2%86%92-brightgreen)](https://costguard-production-3afa.up.railway.app)
 
 ---
 
-<p align="center">
-  <a href="https://costguard.up.railway.app">
-    <img src="https://img.shields.io/badge/%E2%9A%A1%20Try%20it%20now%20%E2%80%94%20no%20sign%20up%2C%20no%20API%20keys-costguard.up.railway.app-6d28d9?style=for-the-badge&logo=railway&logoColor=white" alt="Try CostGuard Now" />
-  </a>
-</p>
+---
 
-<p align="center"><strong>No API keys needed for Simulation Mode. Upload a file, get results instantly.</strong></p>
+## Try It Now
+
+**[costguard-production-3afa.up.railway.app](https://costguard-production-3afa.up.railway.app)**
+
+No account. No API keys. No setup. Just upload a CSV or Parquet file and get your answer in under 15 seconds.
+
+> Most teams are overpaying for LLMs by 10–20× — using GPT-4o for tasks a $0.0001/1K model handles just as well. CostGuard shows you exactly which model fits your data, what it will cost per run, and how much you save versus the alternatives.
+
+**How it works in 4 steps:**
+
+1. **Upload** — drop any CSV or Parquet file (or use a built-in sample dataset)
+2. **Benchmark** — CostGuard evaluates 15 LLMs against your actual data using [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)
+3. **Compare** — see RDAB score, cost per run, latency, and a 4-dimension scorecard for every model
+4. **Deploy** — copy the one-click config and paste it straight into your project
+
+The live result screen shows three numbers front and center: **Best Model**, **Estimated Cost per run**, and **Potential Savings** vs the most expensive alternative. Everything else is detail.
 
 ---
 
@@ -159,23 +170,6 @@ railway open
 
 ---
 
-## Deploy to Render
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/patibandlavenkatamanideep/CostGuard)
-
-```bash
-# 1. Fork this repo on GitHub
-
-# 2. Go to https://dashboard.render.com → New → Web Service
-#    Connect your fork — Render auto-detects render.yaml
-
-# 3. Add API keys in the Environment tab (all optional)
-
-# 4. Click Deploy — live in ~3 minutes
-```
-
----
-
 ## API Reference
 
 Auto-documented at `/docs` (Swagger) and `/redoc`.
@@ -183,7 +177,7 @@ Auto-documented at `/docs` (Swagger) and `/redoc`.
 ### POST `/evaluate`
 
 ```bash
-curl -X POST https://costguard.up.railway.app/evaluate \
+curl -X POST https://costguard-production-3afa.up.railway.app/evaluate \
   -F "file=@my_data.csv" \
   -F "task_description=Analyze customer churn patterns" \
   -F "num_questions=5"
@@ -209,12 +203,12 @@ curl -X POST https://costguard.up.railway.app/evaluate \
 
 ### GET `/health`
 ```bash
-curl https://costguard.up.railway.app/health
+curl https://costguard-production-3afa.up.railway.app/health
 ```
 
 ### GET `/models`
 ```bash
-curl https://costguard.up.railway.app/models
+curl https://costguard-production-3afa.up.railway.app/models
 ```
 
 ---
@@ -310,6 +304,51 @@ ruff format .
 # Type check
 mypy backend/ evaluation/
 ```
+
+---
+
+## Layer 4 — Observability & Alerting
+
+CostGuard includes a lightweight observability layer that logs every evaluation, tracks score history, and detects model degradation automatically.
+
+### What it does
+
+| Capability | Detail |
+|---|---|
+| **Evaluation logging** | Every run is persisted to a local SQLite file (no external service required) |
+| **Historical averages** | Per-model average RDAB scores accumulate across runs |
+| **Drift detection** | If a model's current score drops >10% below its historical average, a drift event is recorded |
+| **Slack alerts** | Optional Slack webhook fires automatically when drift is detected |
+| **History & Alerts tab** | A dedicated Streamlit tab shows recent evaluations, drift events, and model averages |
+
+### Storage
+
+All data is written to a single SQLite file (default: `/tmp/costguard_history.db`). Override the path:
+
+```bash
+export COSTGUARD_DB_PATH=/var/data/costguard.db
+```
+
+Two tables:
+- `evaluations` — one row per completed evaluation (model, scores, cost, timestamp, dataset hash)
+- `drift_events` — recorded when a score drop >10% is detected vs historical average
+
+### Slack alerts (optional)
+
+Set `SLACK_WEBHOOK_URL` in your environment to enable drift notifications:
+
+```bash
+export SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T.../B.../...
+```
+
+Alert fires only when drift is detected and the webhook is configured. No webhook = silent logging only.
+
+### Business value
+
+- **Catch regressions early** — if a provider silently degrades, you'll know before it affects production workloads.
+- **Audit trail** — every recommendation is logged with a dataset fingerprint, making it trivial to replay or dispute a cost decision.
+- **Trend analysis** — the Model Averages tab shows which models are consistently strong on your data type over time, not just on a single run.
+- **Zero infra overhead** — SQLite means no Postgres, Redis, or external service to operate. Works out of the box on Railway and local dev.
 
 ---
 
