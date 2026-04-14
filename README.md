@@ -1,6 +1,6 @@
 # CostGuard
 
-> **Stop guessing which LLM to use. CostGuard benchmarks 15 models against your actual data in under 15 seconds — and tells you exactly what it will cost.**
+> **Stop guessing which LLM to use. CostGuard benchmarks 15 models against your actual data — Simulation mode in under 15 seconds, Live mode in 1–3 minutes — and tells you exactly what it will cost.**
 
 [![CI/CD](https://github.com/patibandlavenkatamanideep/CostGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/patibandlavenkatamanideep/CostGuard/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
@@ -16,9 +16,20 @@
 
 **[costguard-production-3afa.up.railway.app](https://costguard-production-3afa.up.railway.app)**
 
-No account. No API keys. No setup. Just upload a CSV or Parquet file and get your answer in under 15 seconds.
+No account. No API keys. No setup. Upload a CSV or Parquet file and get your answer in **under 15 seconds** (Simulation mode) or **1–3 minutes** (Live mode with your own API keys).
+
+> 🔒 **Privacy:** your file is processed entirely in memory and never written to disk or stored.
 
 > Most teams are overpaying for LLMs by 10–20× — using GPT-4o for tasks a $0.0001/1K model handles just as well. CostGuard shows you exactly which model fits your data, what it will cost per run, and how much you save versus the alternatives.
+
+**Prefer to self-host?** Run it locally in one command — no Railway account needed:
+
+```bash
+git clone https://github.com/patibandlavenkatamanideep/CostGuard.git && cd CostGuard
+cp .env.example .env  # add API keys optionally
+docker compose up
+# Dashboard → http://localhost:8501 · API docs → http://localhost:8000/docs
+```
 
 **How it works in 4 steps:**
 
@@ -42,7 +53,7 @@ Upload any CSV or Parquet file. CostGuard runs your data through **[RealDataAgen
 - **One-click copyable config** — paste directly into your project
 - **Radar chart** comparing Correctness · Code Quality · Efficiency · Stat Validity
 
-No account. No data stored. Results in under 15 seconds.
+No account. Your data is processed in memory and never stored. Simulation results in under 15 seconds; Live mode takes 1–3 minutes.
 
 ---
 
