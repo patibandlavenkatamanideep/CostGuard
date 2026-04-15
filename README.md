@@ -1,6 +1,6 @@
 # CostGuard
 
-> **Stop guessing which LLM to use. CostGuard benchmarks 15 models against your actual data — Simulation mode in under 15 seconds, Live mode in 1–3 minutes — and tells you exactly what it will cost.**
+> **Stop guessing which LLM to use. CostGuard benchmarks 10 models against your actual data — Simulation mode in under 15 seconds, Live mode in 1–3 minutes — and tells you exactly what it will cost.**
 
 [![CI/CD](https://github.com/patibandlavenkatamanideep/CostGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/patibandlavenkatamanideep/CostGuard/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
@@ -34,7 +34,7 @@ docker compose up
 **How it works in 4 steps:**
 
 1. **Upload** — drop any CSV or Parquet file (or use a built-in sample dataset)
-2. **Benchmark** — CostGuard evaluates 15 LLMs against your actual data using [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)
+2. **Benchmark** — CostGuard evaluates 10 benchmarked LLMs against your actual data using [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)
 3. **Compare** — see RDAB score, cost per run, latency, and a 4-dimension scorecard for every model
 4. **Deploy** — copy the one-click config and paste it straight into your project
 
@@ -46,7 +46,7 @@ The live result screen shows three numbers front and center: **Best Model**, **E
 
 Most teams pick an LLM and stick with it — often overpaying by 10–20× for tasks a cheaper model handles just as well. CostGuard fixes that.
 
-Upload any CSV or Parquet file. CostGuard runs your data through **[RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)** — a 4-dimensional evaluation harness — across 15 major LLMs, then surfaces:
+Upload any CSV or Parquet file. CostGuard runs your data through **[RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)** — a 4-dimensional evaluation harness — across 10 benchmarked LLMs, then surfaces:
 
 - **Best model recommendation** ranked by RDAB score + exact cost
 - **Per-run cost estimate** down to $0.000001 precision
@@ -92,23 +92,25 @@ graph TB
 
 ## Supported Models
 
-| Model | Provider | Tier | Input $/1K | RDAB Note |
-|-------|----------|------|-----------|-----------|
-| Claude Sonnet 4.6 | Anthropic | Premium | $0.003 | RDAB default model |
-| Claude Opus 4.6 | Anthropic | Premium | $0.015 | Highest capability |
-| Claude Haiku 4.5 | Anthropic | Economy | $0.00025 | Token-inefficient (RDAB finding) |
-| **GPT-4.1** | OpenAI | Premium | **$0.002** | **RDAB cost-performance leader** |
-| GPT-4.1 mini | OpenAI | Balanced | $0.0004 | Fast, 1M context |
-| GPT-4.1 nano | OpenAI | Economy | $0.0001 | Ultra-cheap |
-| GPT-4o | OpenAI | Premium | $0.0025 | Proven reliability |
-| GPT-4o mini | OpenAI | Balanced | $0.00015 | Structured output |
-| GPT-5 | OpenAI | Premium | $0.015 | Max capability, 16× GPT-4.1 cost |
-| **Gemini 2.5 Flash** | Google | Economy | **$0.000075** | **Cheapest overall** |
-| Gemini 2.5 Pro | Google | Premium | $0.00125 | 2M context |
-| Llama 3.3 70B (Groq) | Groq | Balanced | $0.00059 | Best on modeling tasks (RDAB) |
-| Mixtral 8x7B (Groq) | Groq | Economy | $0.00024 | Ultra-fast MoE |
-| Grok-3 | xAI | Premium | $0.003 | sklearn blind spot (RDAB finding) |
-| Grok-3 mini | xAI | Balanced | $0.0003 | Fast, cheap |
+CostGuard supports 15 models for Live Mode evaluation. The 10 models marked with ✓ have full RDAB benchmark data (163 runs · 23 tasks) and power Simulation Mode results.
+
+| Model | Provider | Tier | Input $/1K | RDAB |
+|-------|----------|------|-----------|:----:|
+| Claude Sonnet 4.6 | Anthropic | Premium | $0.003 | ✓ Default model |
+| Claude Opus 4.6 | Anthropic | Premium | $0.015 | ✓ Highest capability |
+| Claude Haiku 4.5 | Anthropic | Economy | $0.00025 | ✓ Token-inefficient vs peers |
+| **GPT-4.1** | OpenAI | Premium | **$0.002** | ✓ **Cost-performance leader** |
+| GPT-4.1 mini | OpenAI | Balanced | $0.0004 | Live Mode only |
+| GPT-4.1 nano | OpenAI | Economy | $0.0001 | Live Mode only |
+| GPT-4o | OpenAI | Premium | $0.0025 | ✓ Proven reliability |
+| GPT-4o mini | OpenAI | Balanced | $0.00015 | ✓ Strong cost-efficiency |
+| GPT-5 | OpenAI | Premium | $0.015 | ✓ Max capability, 16× GPT-4.1 cost |
+| **Gemini 2.5 Flash** | Google | Economy | **$0.000075** | ✓ **Cheapest overall** |
+| Gemini 2.5 Pro | Google | Premium | $0.00125 | Live Mode only |
+| Llama 3.3 70B (Groq) | Groq | Balanced | $0.00059 | ✓ Best on modeling tasks |
+| Mixtral 8x7B (Groq) | Groq | Economy | $0.00024 | Live Mode only |
+| Grok-3 | xAI | Premium | $0.003 | Live Mode only |
+| Grok-3 mini | xAI | Balanced | $0.0003 | ✓ sklearn blind spot (RDAB) |
 
 ---
 
@@ -334,7 +336,9 @@ CostGuard includes a lightweight observability layer that logs every evaluation,
 
 ### Storage
 
-All data is written to a single SQLite file (default: `/tmp/costguard_history.db`). Override the path:
+**Your uploaded data is never stored.** CostGuard writes only evaluation metadata — model scores, cost estimates, timestamps, and a dataset fingerprint (SHA-256 hash) — to a local SQLite file. The raw file contents are processed entirely in memory and discarded immediately after scoring.
+
+All metadata is written to a single SQLite file (default: `/tmp/costguard_history.db`). Override the path:
 
 ```bash
 export COSTGUARD_DB_PATH=/var/data/costguard.db
@@ -342,7 +346,7 @@ export COSTGUARD_DB_PATH=/var/data/costguard.db
 
 Two tables:
 - `evaluations` — one row per completed evaluation (model, scores, cost, timestamp, dataset hash)
-- `drift_events` — recorded when a score drop >10% is detected vs historical average
+- `drift_events` — recorded when a model's score drops >10% below its historical average
 
 ### Slack alerts (optional)
 
