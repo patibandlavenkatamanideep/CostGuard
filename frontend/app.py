@@ -678,22 +678,37 @@ if result := st.session_state.get("result"):
             },
             title="RDAB Score vs Estimated Cost — top-left corner is best value",
         )
-        fig.update_traces(textposition="top center", textfont_size=10)
+        fig.update_traces(
+            textposition="top center",
+            textfont=dict(size=12, color="#1e293b", family="Inter"),
+        )
         fig.add_annotation(
             x=rec["estimated_total_cost_usd"],
             y=rec["rdab_scorecard"]["rdab_score"],
             text="  ★ Recommended",
             showarrow=True, arrowhead=2, arrowcolor="#6366f1",
-            font={"color": "#6366f1", "size": 11, "family": "Inter"},
-            bgcolor="rgba(99,102,241,0.08)", bordercolor="#6366f1", borderwidth=1, borderpad=4,
+            font={"color": "#6366f1", "size": 12, "family": "Inter"},
+            bgcolor="rgba(99,102,241,0.10)", bordercolor="#6366f1", borderwidth=1, borderpad=4,
         )
         fig.update_layout(
             height=440,
             plot_bgcolor=CHART_BG, paper_bgcolor=CHART_BG,
-            font_family="Inter",
-            xaxis=dict(gridcolor=GRID_COLOR, zeroline=False),
-            yaxis=dict(gridcolor=GRID_COLOR, zeroline=False),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            font=dict(family="Inter", color="#1e293b"),
+            title=dict(font=dict(size=13, color="#1e293b")),
+            xaxis=dict(
+                gridcolor=GRID_COLOR, zeroline=False,
+                title_font=dict(size=12, color="#1e293b"),
+                tickfont=dict(size=11, color="#475569"),
+            ),
+            yaxis=dict(
+                gridcolor=GRID_COLOR, zeroline=False,
+                title_font=dict(size=12, color="#1e293b"),
+                tickfont=dict(size=11, color="#475569"),
+            ),
+            legend=dict(
+                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                font=dict(size=11, color="#1e293b"),
+            ),
             margin=dict(l=0, r=0, t=50, b=0),
         )
         st.plotly_chart(fig, use_container_width=True)
