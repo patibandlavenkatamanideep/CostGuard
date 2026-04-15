@@ -44,6 +44,7 @@ from backend.logger import logger
 from backend.models import (
     DatasetStats,
     EvalMode,
+    EvalResponse,
     EvalStatus,
     ModelResult,
     ModelTier,
@@ -292,13 +293,13 @@ def _simulate_scorecard(
     }[pricing.tier]
 
     overrides: dict[str, dict[str, float]] = {
+        # Sourced from RDAB leaderboard (163 runs · 23 tasks · 10 models)
         "gpt-4.1":                    {"correctness": 0.93, "efficiency": 0.97},
         "gemini-2.5-flash":           {"efficiency": 0.95},
         "llama-3.3-70b-versatile":    {"correctness": 0.82, "code_quality": 0.78},
         "claude-sonnet-4-6":          {"correctness": 0.90, "efficiency": 0.65},
         "claude-haiku-4-5-20251001":  {"efficiency": 0.40},
-        "grok-3":                     {"code_quality": 0.55},
-        "grok-3-mini":                {"code_quality": 0.50},
+        "grok-3-mini":                {"code_quality": 0.50},  # sklearn blind spot confirmed in RDAB
     }
     for key, vals in overrides.get(pricing.model_id, {}).items():
         base[key] = vals

@@ -220,7 +220,7 @@ MODELS: dict[str, ModelPricing] = {
         output_per_1k=0.015,      # $15.00 / 1M
         context_window=131_072,
         strengths=["Strong reasoning", "Real-time knowledge"],
-        limitations=["Weak on sklearn tasks (RDAB finding)", "xAI API only"],
+        limitations=["Not in RDAB benchmark set", "xAI API only"],
     ),
     "grok-3-mini": ModelPricing(
         model_id="grok-3-mini",
