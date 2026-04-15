@@ -195,12 +195,12 @@ html, body, [data-testid="stAppViewContainer"] {
 /* ── Section heading ── */
 .sh {
     display: flex; align-items: center; gap: 0.5rem;
-    border-bottom: 2px solid #f1f5f9;
+    border-bottom: 2px solid #cbd5e1;
     padding-bottom: 0.5rem;
     margin: 1.75rem 0 1rem;
 }
-.sh h3 { font-size: 0.95rem; font-weight: 700; color: #1e293b; margin: 0; }
-.sh-icon { font-size: 1rem; }
+.sh h3 { font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0; }
+.sh-icon { font-size: 1.1rem; }
 
 /* ── Tier badge ── */
 .tier { display: inline-block; font-size: 0.67rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
@@ -727,20 +727,30 @@ if result := st.session_state.get("result"):
                 name=row["display_name"],
                 line_color=colors[i % len(colors)],
                 fillcolor=colors[i % len(colors)],
-                opacity=0.18,
-                line_width=2,
+                opacity=0.35,
+                line_width=2.5,
             ))
         radar.update_layout(
             polar=dict(
-                radialaxis=dict(visible=True, range=[0, 1], tickfont_size=9, gridcolor=GRID_COLOR),
-                angularaxis=dict(tickfont_size=11),
+                radialaxis=dict(
+                    visible=True, range=[0, 1],
+                    tickfont=dict(size=10, color="#475569"),
+                    gridcolor=GRID_COLOR,
+                    tickformat=".0%",
+                ),
+                angularaxis=dict(
+                    tickfont=dict(size=12, color="#1e293b"),
+                ),
                 bgcolor=CHART_BG,
             ),
-            title=dict(text="4-Dimensional Scorecard — Top 5 Models", font_size=13),
+            title=dict(text="4-Dimensional Scorecard — Top 5 Models", font=dict(size=13, color="#1e293b")),
             height=480,
             paper_bgcolor=CHART_BG,
-            font_family="Inter",
-            legend=dict(orientation="h", yanchor="top", y=-0.05, xanchor="center", x=0.5),
+            font=dict(family="Inter", color="#1e293b"),
+            legend=dict(
+                orientation="h", yanchor="top", y=-0.05, xanchor="center", x=0.5,
+                font=dict(size=11, color="#1e293b"),
+            ),
             margin=dict(l=10, r=10, t=50, b=10),
         )
         st.plotly_chart(radar, use_container_width=True)
@@ -761,15 +771,28 @@ if result := st.session_state.get("result"):
             labels={"latency_ms": "Latency (ms)", "display_name": ""},
             text="latency_ms",
         )
-        fig2.update_traces(texttemplate="%{text:.0f} ms", textposition="outside")
+        fig2.update_traces(
+            texttemplate="%{text:.0f} ms",
+            textposition="outside",
+            textfont=dict(size=11, color="#1e293b"),
+        )
         fig2.update_layout(
             height=420,
             plot_bgcolor=CHART_BG, paper_bgcolor=CHART_BG,
-            font_family="Inter",
-            xaxis=dict(tickangle=-35, gridcolor=GRID_COLOR),
-            yaxis=dict(gridcolor=GRID_COLOR),
+            font=dict(family="Inter", color="#1e293b"),
+            title=dict(font=dict(size=13, color="#1e293b")),
+            xaxis=dict(
+                tickangle=-35, gridcolor=GRID_COLOR,
+                tickfont=dict(size=11, color="#1e293b"),
+                title_font=dict(size=12, color="#1e293b"),
+            ),
+            yaxis=dict(
+                gridcolor=GRID_COLOR,
+                tickfont=dict(size=11, color="#475569"),
+                title_font=dict(size=12, color="#1e293b"),
+            ),
             showlegend=False,
-            margin=dict(l=0, r=0, t=50, b=80),
+            margin=dict(l=0, r=0, t=50, b=100),
         )
         st.plotly_chart(fig2, use_container_width=True)
 
