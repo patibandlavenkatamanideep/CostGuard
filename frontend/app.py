@@ -625,6 +625,17 @@ if result := st.session_state.get("result"):
     <div class="sc-bar-bg"><div class="sc-bar-fill" style="width:{_bar_pct}%"></div></div>
   </div>"""
     st.markdown(f'<div class="scorecard">{_sc_items}</div>', unsafe_allow_html=True)
+    st.info(
+        "**Why is Stat Validity universally low?** "
+        "This dimension measures whether a model reports uncertainty correctly — "
+        "citing p-values, confidence intervals, and avoiding overconfident claims. "
+        "All 10 models score 22–28% here regardless of provider. "
+        "This is a documented industry-wide gap in RDAB's 163-run benchmark: "
+        "LLMs compute accurately but rarely add statistical rigour unprompted. "
+        "It does **not** affect the model's ability to answer your data questions correctly — "
+        "and it's exactly the kind of gap a cost-optimisation tool should surface.",
+        icon="ℹ️",
+    )
 
     # ── Dataset overview ─────────────────────────────────────────────────────
     with st.expander("📂  Dataset Overview", expanded=False):
@@ -663,16 +674,23 @@ if result := st.session_state.get("result"):
 
 
     with tab1:
+        # Clip zero costs so log scale doesn't break; use a realistic floor ($0.000001)
+        _COST_FLOOR = 1e-6
+        df_plot = df_models.copy()
+        df_plot["plot_cost"] = df_plot["estimated_total_cost_usd"].clip(lower=_COST_FLOOR)
+        _rec_cost  = max(rec["estimated_total_cost_usd"], _COST_FLOOR)
+        _rec_score = rec["rdab_scorecard"]["rdab_score"]
+
         fig = px.scatter(
-            df_models,
-            x="estimated_total_cost_usd",
+            df_plot,
+            x="plot_cost",
             y="rdab_score",
             text="display_name",
             color="tier",
-            size=[30] * len(df_models),
+            size=[30] * len(df_plot),
             color_discrete_map=TIER_COLORS,
             labels={
-                "estimated_total_cost_usd": "Estimated Cost per Run (USD)",
+                "plot_cost": "Cost per Run (USD) — log scale",
                 "rdab_score": "RDAB Score",
                 "tier": "Tier",
             },
@@ -682,28 +700,38 @@ if result := st.session_state.get("result"):
             textposition="top center",
             textfont=dict(size=12, color="#1e293b", family="Inter"),
         )
-        fig.add_annotation(
-            x=rec["estimated_total_cost_usd"],
-            y=rec["rdab_scorecard"]["rdab_score"],
-            text="  ★ Recommended",
-            showarrow=True, arrowhead=2, arrowcolor="#6366f1",
-            font={"color": "#6366f1", "size": 12, "family": "Inter"},
-            bgcolor="rgba(99,102,241,0.10)", bordercolor="#6366f1", borderwidth=1, borderpad=4,
+        # Explicit star marker so the recommended model is always visible
+        # even if the annotation arrow lands slightly off due to floating-point.
+        fig.add_trace(go.Scatter(
+            x=[_rec_cost],
+            y=[_rec_score],
+            mode="markers+text",
+            marker=dict(symbol="star", size=20, color="#6366f1",
+                        line=dict(color="#ffffff", width=1.5)),
+            text=["★ Recommended"],
+            textposition="top center",
+            textfont=dict(size=12, color="#6366f1", family="Inter"),
+            name="Recommended",
+            showlegend=True,
+        ))
+        fig.update_xaxes(
+            type="log",
+            title="Cost per Run (USD) — log scale",
+            gridcolor=GRID_COLOR, zeroline=False,
+            title_font=dict(size=12, color="#1e293b"),
+            tickfont=dict(size=11, color="#475569"),
+            tickformat=".2e",
         )
         fig.update_layout(
-            height=440,
+            height=460,
             plot_bgcolor=CHART_BG, paper_bgcolor=CHART_BG,
             font=dict(family="Inter", color="#1e293b"),
             title=dict(font=dict(size=13, color="#1e293b")),
-            xaxis=dict(
-                gridcolor=GRID_COLOR, zeroline=False,
-                title_font=dict(size=12, color="#1e293b"),
-                tickfont=dict(size=11, color="#475569"),
-            ),
             yaxis=dict(
                 gridcolor=GRID_COLOR, zeroline=False,
                 title_font=dict(size=12, color="#1e293b"),
                 tickfont=dict(size=11, color="#475569"),
+                tickformat=".0%",
             ),
             legend=dict(
                 orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
@@ -866,8 +894,15 @@ with _hist_tab:
         _total = get_total_eval_count()
 
         import datetime as _dt
-        # Stats strip
         _simulated_count = sum(1 for e in _evals if e.get("simulated", 1))
+        _live_count = len(_evals) - _simulated_count
+        if _live_count == 0 and _total > 0:
+            st.info(
+                "All logged evaluations used **Simulation Mode**. "
+                "Add at least one provider API key and run a live benchmark "
+                "to populate the Live column — recommended before public launch.",
+                icon="💡",
+            )
         st.markdown(
             f'<div class="obs-row">'
             f'<div class="obs-stat"><div class="obs-stat-label">Total Evals</div>'
@@ -877,7 +912,7 @@ with _hist_tab:
             f'<div class="obs-stat"><div class="obs-stat-label">Simulated</div>'
             f'<div class="obs-stat-value">{_simulated_count}</div></div>'
             f'<div class="obs-stat"><div class="obs-stat-label">Live</div>'
-            f'<div class="obs-stat-value">{len(_evals) - _simulated_count}</div></div>'
+            f'<div class="obs-stat-value">{_live_count}</div></div>'
             f'</div>',
             unsafe_allow_html=True,
         )
