@@ -720,7 +720,8 @@ if result := st.session_state.get("result"):
             gridcolor=GRID_COLOR, zeroline=False,
             title_font=dict(size=12, color="#1e293b"),
             tickfont=dict(size=11, color="#475569"),
-            tickformat=".2e",
+            tickvals=[1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1],
+            ticktext=["$0.000001", "$0.00001", "$0.0001", "$0.001", "$0.01", "$0.10"],
         )
         fig.update_layout(
             height=460,
