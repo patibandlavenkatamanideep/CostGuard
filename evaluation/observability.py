@@ -11,6 +11,7 @@ Alerts:  optional — only fires if SLACK_WEBHOOK_URL env var is set
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -20,6 +21,40 @@ from pathlib import Path
 from typing import Any
 
 from backend.logger import logger
+
+# ─── PII sanitisation ────────────────────────────────────────────────────────
+
+def sanitize_for_logging(response: dict) -> dict:
+    """
+    Strip or hash PII from a serialised EvalResponse before it reaches SQLite.
+
+    - column_names: replaced with 8-char SHA-256 prefixes (unique but opaque).
+    - data_sample fields anywhere in the tree: replaced with "[REDACTED]".
+
+    Returns a deep copy — the original dict is never mutated.
+    """
+    sanitized = copy.deepcopy(response)
+
+    ds = sanitized.get("dataset_stats")
+    if isinstance(ds, dict) and "column_names" in ds:
+        ds["column_names"] = [
+            hashlib.sha256(c.encode()).hexdigest()[:8]
+            for c in ds["column_names"]
+        ]
+
+    def _redact_samples(node: Any) -> None:
+        if isinstance(node, dict):
+            if "data_sample" in node:
+                node["data_sample"] = "[REDACTED]"
+            for v in node.values():
+                _redact_samples(v)
+        elif isinstance(node, list):
+            for item in node:
+                _redact_samples(item)
+
+    _redact_samples(sanitized)
+    return sanitized
+
 
 # ─── Database setup ───────────────────────────────────────────────────────────
 

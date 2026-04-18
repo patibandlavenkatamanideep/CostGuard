@@ -77,7 +77,7 @@ graph TB
     RDAB --> XAI[xAI<br/>Grok-3 · Grok-3 mini]
 
     RDAB --> SC[RDAB CompositeScorer<br/>Correctness · Code · Efficiency · StatVal]
-    SC --> RK[Ranker<br/>60% RDAB + 40% Cost]
+    SC --> RK[Ranker<br/>75% RDAB + 25% sqrt-normalised Cost]
     RK -->|EvalResponse| API
     API -->|JSON| ST
     ST -->|Radar + Scatter + Table + Config| User
@@ -236,6 +236,24 @@ CostGuard uses [RealDataAgentBench](https://github.com/patibandlavenkatamanideep
 | **Code Quality** | 20% | Vectorised operations, naming conventions, no magic numbers |
 | **Efficiency** | 15% | Token + step budget adherence (Easy: 20K tokens, Medium: 50K) |
 | **Stat Validity** | 15% | Reports p-values, confidence intervals, avoids p-hacking |
+
+### Ranking Formula
+
+After RDAB scoring, models are ranked by a **composite score** that balances quality against cost:
+
+```
+composite = rdab_score × 0.75 + cost_score × 0.25
+
+where:
+  cost_score = 1 − sqrt(model_cost / max_cost_in_cohort)
+```
+
+**Why sqrt (not linear) cost normalisation?**  
+With linear normalisation, a model costing $0.001 and one costing $0.10 both score near 1.0 for cost — the difference barely moves the composite. With `sqrt`, cost differences are compressed non-linearly: a model that is 10× cheaper gets a meaningful reward (~68% of the maximum cost advantage), but a model that is 20% better on RDAB quality can still outrank a cheaper alternative. This reflects the real-world tradeoff: cost matters, but quality regressions should not be hidden by cheap pricing.
+
+**Weights explained:**
+- **75% RDAB score** — primary signal; reflects actual task performance on data similar to yours
+- **25% cost score** — secondary signal; prevents the cheapest model from always winning regardless of quality
 
 ### Key RDAB Benchmark Findings (163 runs)
 

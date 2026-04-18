@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import tempfile
 import time
 import uuid
@@ -57,7 +58,7 @@ from evaluation.data_loader import (
     load_bytes,
     sample_dataframe,
 )
-from evaluation.observability import log_evaluation
+from evaluation.observability import log_evaluation, sanitize_for_logging
 from evaluation.pricing import ModelPricing, get_models_for_providers
 from evaluation.token_counter import estimate_batch_tokens
 
@@ -93,24 +94,76 @@ def _build_task_dict(
     Build a RDAB-compatible task dictionary from user-uploaded data.
     This mimics the structure of tasks/*.yaml but is generated on-the-fly.
     """
-    num_cols = df.select_dtypes(include="number").columns.tolist()
-    cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
-
-    # Derive ground-truth hints from actual data (used by CorrectnessScorer)
+    # Derive ground truth dynamically from what the questions actually ask about.
+    # This ensures CorrectnessScorer has a matching key for every question type.
     ground_truth: dict[str, Any] = {
         "row_count": len(df),
         "column_count": len(df.columns),
         "columns": df.columns.tolist(),
     }
-    if num_cols:
-        col = num_cols[0]
-        ground_truth["first_numeric_mean"] = round(float(df[col].mean()), 4)
-        ground_truth["first_numeric_col"] = col
-    if cat_cols:
-        col = cat_cols[0]
-        top_val = df[col].mode().iloc[0] if not df[col].mode().empty else ""
-        ground_truth["first_categorical_top"] = str(top_val)
-        ground_truth["first_categorical_col"] = col
+
+    for q in questions:
+        # Average of a numeric column
+        m = re.search(r"average value of '([^']+)'", q, re.IGNORECASE)
+        if m:
+            col = m.group(1)
+            if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+                ground_truth[f"{col}_mean"] = round(float(df[col].mean()), 4)
+
+        # Maximum value of a numeric column
+        m = re.search(r"maximum value of '([^']+)'", q, re.IGNORECASE)
+        if m:
+            col = m.group(1)
+            if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+                ground_truth[f"{col}_max"] = float(df[col].max())
+                ground_truth[f"{col}_max_row"] = int(df[col].idxmax())
+
+        # Count of rows above the median
+        m = re.search(r"'([^']+)' value above the median", q, re.IGNORECASE)
+        if m:
+            col = m.group(1)
+            if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+                ground_truth[f"{col}_above_median_count"] = int(
+                    (df[col] > df[col].median()).sum()
+                )
+
+        # Top-3 most frequent categorical values
+        m = re.search(r"top 3 most frequent values in the '([^']+)'", q, re.IGNORECASE)
+        if m:
+            col = m.group(1)
+            if col in df.columns:
+                ground_truth[f"{col}_top3"] = [
+                    str(v) for v in df[col].value_counts().head(3).index.tolist()
+                ]
+
+        # Unique value count for a column
+        m = re.search(r"unique values does the '([^']+)'", q, re.IGNORECASE)
+        if m:
+            col = m.group(1)
+            if col in df.columns:
+                ground_truth[f"{col}_unique_count"] = int(df[col].nunique())
+
+        # Which column has the most missing values?
+        if re.search(r"highest percentage of missing values", q, re.IGNORECASE):
+            missing_pcts = df.isnull().mean()
+            ground_truth["most_missing_column"] = str(missing_pcts.idxmax())
+            ground_truth["most_missing_pct"] = round(float(missing_pcts.max()), 4)
+
+        # How many rows have at least one missing value?
+        if re.search(r"rows contain at least one missing value", q, re.IGNORECASE):
+            ground_truth["rows_with_any_missing"] = int(df.isnull().any(axis=1).sum())
+
+        # Correlation between two numeric columns
+        m = re.search(r"correlation between '([^']+)' and '([^']+)'", q, re.IGNORECASE)
+        if m:
+            c1, c2 = m.group(1), m.group(2)
+            if (
+                c1 in df.columns and c2 in df.columns
+                and pd.api.types.is_numeric_dtype(df[c1])
+                and pd.api.types.is_numeric_dtype(df[c2])
+            ):
+                corr = df[[c1, c2]].corr().iloc[0, 1]
+                ground_truth[f"{c1}_{c2}_correlation"] = round(float(corr), 4)
 
     return {
         "id": f"user_upload_{uuid.uuid4().hex[:6]}",
@@ -146,7 +199,7 @@ async def _run_rdab_agent(
     pricing: ModelPricing,
     task_dict: dict[str, Any],
     df: pd.DataFrame,
-    merged_env: dict[str, str],
+    api_keys: dict[str, str],
 ) -> tuple[dict[str, Any], float]:
     """
     Run a single RDAB agent evaluation for one model.
@@ -155,17 +208,13 @@ async def _run_rdab_agent(
         pricing: Model pricing / metadata object.
         task_dict: RDAB task specification.
         df: Sampled dataframe.
-        merged_env: Combined server + session API key env vars.
+        api_keys: Combined server + session API keys passed directly to the Agent.
+                  Never written to os.environ — safe for concurrent requests.
 
     Returns:
         (result_dict, latency_ms).
     Raises on timeout or API error — caller catches and falls back to simulation.
     """
-    old_env: dict[str, str | None] = {}
-    for k, v in merged_env.items():
-        old_env[k] = os.environ.get(k)
-        os.environ[k] = v
-
     tmp_path: str | None = None
     try:
         start = time.monotonic()
@@ -181,17 +230,13 @@ async def _run_rdab_agent(
             pricing.rdab_alias,
             task_dict,
             tmp_path,
+            api_keys,
         )
 
         latency_ms = (time.monotonic() - start) * 1000
         return result, latency_ms
 
     finally:
-        for k, v in old_env.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
         if tmp_path:
             try:
                 Path(tmp_path).unlink(missing_ok=True)
@@ -203,10 +248,12 @@ def _rdab_sync_run(
     model_alias: str,
     task_dict: dict[str, Any],
     data_path: str,
+    api_keys: dict[str, str],
 ) -> dict[str, Any]:
     """
     Synchronous RDAB agent run — called from a thread pool executor.
     Uses RDAB's Agent directly since we have a dynamic task (not a YAML file).
+    api_keys are passed explicitly; os.environ is never mutated.
     """
     from realdataagentbench.harness import Agent
     from realdataagentbench.harness.tracer import Tracer
@@ -214,7 +261,7 @@ def _rdab_sync_run(
     df = pd.read_parquet(data_path)
     tracer = Tracer()
 
-    agent = Agent(model=model_alias)
+    agent = Agent(model=model_alias, api_keys=api_keys)
     result = agent.run(
         prompt=task_dict["prompt"],
         dataframe=df,
@@ -263,6 +310,37 @@ def _rdab_score(
         token_count=token_count,
         step_count=step_count,
         simulated=False,
+    )
+
+
+# ─── Simulation disclaimer ───────────────────────────────────────────────────
+
+def get_simulation_disclaimer() -> str:
+    """
+    Return a detailed plain-English warning about what simulation mode does
+    and does not guarantee. Surface this wherever simulation scores are displayed.
+    """
+    return (
+        "SIMULATION MODE — scores are NOT based on your uploaded data.\n\n"
+        "What these scores represent:\n"
+        "  • Baseline values are drawn from the RDAB benchmark leaderboard "
+        "(163 runs · 23 tasks · 10 models, April 2026 release), not from "
+        "live inference on your specific file.\n"
+        "  • A dataset-specific jitter of up to ±3.5% is applied by hashing "
+        "your file's row count, column count, and column names. This makes "
+        "different uploads produce slightly different rankings, but the jitter "
+        "does NOT reflect actual model behaviour on your data or domain.\n\n"
+        "What this means for your decision:\n"
+        "  • Model ranking in simulation may not match ranking on live "
+        "evaluation against your actual dataset. A model that scores first "
+        "in simulation could score last on your real workload — especially "
+        "for domain-specific tasks (finance, biomedical, code, etc.).\n"
+        "  • Score differences smaller than ~7% between any two models are "
+        "within the jitter range and should not be treated as significant.\n\n"
+        "How to enable live mode:\n"
+        "  • Add at least one provider API key in the sidebar "
+        "(OpenAI, Anthropic, Google, or Groq). Keys are used only for the "
+        "current session and are never stored on the server."
     )
 
 
@@ -371,7 +449,7 @@ async def _evaluate_model(
 
     if RDAB_AVAILABLE and pricing.provider in live_providers:
         try:
-            result, latency_ms = await _run_rdab_agent(pricing, task_dict, df, merged_env)
+            result, latency_ms = await _run_rdab_agent(pricing, task_dict, df, api_keys=merged_env)
             rdab_scorecard = _rdab_score(task_dict, result)
             logger.info(
                 f"[RDAB live] {pricing.model_id}: "
@@ -552,7 +630,7 @@ async def run_evaluation(
     # ── Layer 4: log to observability store (non-blocking) ────────────────────
     try:
         serialisable = EvalResponse(**response).model_dump(mode="json")
-        log_evaluation(serialisable)
+        log_evaluation(sanitize_for_logging(serialisable))
     except Exception as _obs_err:
         logger.warning(f"[{eval_id}] Observability logging skipped: {_obs_err}")
 
