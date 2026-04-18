@@ -1,6 +1,6 @@
 # CostGuard
 
-> **Stop guessing which LLM to use. CostGuard benchmarks 10 models against your actual data — Simulation mode in under 15 seconds, Live mode in 1–3 minutes — and tells you exactly what it will cost.**
+> **Stop guessing which LLM to use. CostGuard benchmarks 12 models against your actual data — Simulation mode in under 15 seconds, Live mode in 1–3 minutes — and tells you exactly what it will cost.**
 
 [![CI/CD](https://github.com/patibandlavenkatamanideep/CostGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/patibandlavenkatamanideep/CostGuard/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
@@ -92,7 +92,7 @@ graph TB
 
 ## Supported Models
 
-CostGuard supports 15 models for Live Mode evaluation. The 10 models marked with ✓ have full RDAB benchmark data (163 runs · 23 tasks) and power Simulation Mode results.
+CostGuard supports 15 models for Live Mode evaluation. The 12 models marked with ✓ have full RDAB benchmark data (276 runs · 23 tasks) and power Simulation Mode results.
 
 | Model | Provider | Tier | Input $/1K | RDAB |
 |-------|----------|------|-----------|:----:|
@@ -255,13 +255,13 @@ With linear normalisation, a model costing $0.001 and one costing $0.10 both sco
 - **75% RDAB score** — primary signal; reflects actual task performance on data similar to yours
 - **25% cost score** — secondary signal; prevents the cheapest model from always winning regardless of quality
 
-### Key RDAB Benchmark Findings (163 runs)
+### Key RDAB Benchmark Findings (276 runs · 23 tasks · 12 models)
 
-- **GPT-4.1** = best cost-performance ratio ($0.038/task vs GPT-5's $0.596)
-- **Gemini 2.5 Flash** = cheapest per RDAB score ($0.000075/1K input)
-- **Llama 3.3-70B (Groq)** = outperforms on modeling tasks
-- **Claude Haiku** = consumed 608K tokens vs GPT-4.1's 30K on the same task
-- **Universal weakness**: all models score ~0.25 on stat_validity
+- **GPT-4.1-mini** = top composite score (0.832) at $0.013/task — best quality-per-dollar
+- **GPT-5** = second overall (0.812) but 47× more expensive than GPT-4.1-mini ($0.596/task)
+- **Gemini 2.5 Flash** = cheapest at $0.0015/task; only 20.6% below top score
+- **Llama 3.3-70B (Groq)** = $0.002/task, ranks 7th — strongest open-weight option
+- **Stat validity gap**: model average 55.8% vs human expert baseline 81.3% on the same 5 tasks — a confirmed capability gap, not a scorer artefact
 
 ---
 

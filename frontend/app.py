@@ -436,11 +436,11 @@ st.markdown("""
   <div class="hero-icon">🛡️</div>
   <h1 class="hero-title">CostGuard</h1>
   <p class="hero-sub">
-    Upload any dataset and instantly benchmark 10 models on your actual data.
+    Upload any dataset and instantly benchmark 12 models on your actual data.
     Get the best model recommendation with exact per-run cost estimates — no guesswork.
   </p>
   <div class="hero-pills">
-    <span class="hero-pill">10 Benchmarked Models</span>
+    <span class="hero-pill">12 Benchmarked Models</span>
     <span class="hero-pill">4-Dimensional RDAB Scoring</span>
     <span class="hero-pill">No Sign-up</span>
     <span class="hero-pill">Simulation Mode — No API Keys Needed</span>
@@ -484,7 +484,7 @@ with col_how:
   </div>
   <div class="step">
     <div class="step-num">2</div>
-    <div><span class="step-label">Benchmark</span><span class="step-desc">10 models on your data</span></div>
+    <div><span class="step-label">Benchmark</span><span class="step-desc">12 models on your data</span></div>
   </div>
   <div class="step">
     <div class="step-num">3</div>
@@ -517,9 +517,9 @@ if active_file:
     st.caption(f"📄 **{filename}** — {size_str}")
 
     mode_label = (
-        "Running live benchmark across 10 models — this takes 1–3 minutes…"
+        "Running live benchmark across 12 models — this takes 1–3 minutes…"
         if any_key
-        else "Running simulation benchmark across 10 models — usually under 15 seconds…"
+        else "Running simulation benchmark across 12 models — usually under 15 seconds…"
     )
     if st.button("⚡  Analyze & Recommend", type="primary", use_container_width=True):
         with st.spinner(mode_label):
@@ -585,7 +585,7 @@ if result := st.session_state.get("result"):
     <div class="rh-stat rh-stat-purple">
       <div class="rh-stat-label">RDAB Score</div>
       <div class="rh-stat-value">{sc['rdab_score']:.0%}</div>
-      <div class="rh-stat-sub">Composite benchmark (10 models)</div>
+      <div class="rh-stat-sub">Composite benchmark (12 models)</div>
     </div>
     <div class="rh-stat">
       <div class="rh-stat-label">Estimated Cost</div>
@@ -629,8 +629,9 @@ if result := st.session_state.get("result"):
         "**Why is Stat Validity universally low?** "
         "This dimension measures whether a model reports uncertainty correctly — "
         "citing p-values, confidence intervals, and avoiding overconfident claims. "
-        "All 10 models score 22–28% here regardless of provider. "
-        "This is a documented industry-wide gap in RDAB's 163-run benchmark: "
+        "All 12 models average **55.8%** here — versus a human expert baseline of **81.3%** "
+        "on the same 5 tasks. That 25-point gap is a real model capability difference, "
+        "confirmed across 276 runs in the RDAB benchmark: "
         "LLMs compute accurately but rarely add statistical rigour unprompted. "
         "It does **not** affect the model's ability to answer your data questions correctly — "
         "and it's exactly the kind of gap a cost-optimisation tool should surface.",
