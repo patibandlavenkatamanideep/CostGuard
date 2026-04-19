@@ -179,26 +179,33 @@ html,body,[data-testid="stAppViewContainer"]{
     color:#4f46e5 !important;
 }
 
-/* ── Sidebar collapse / reopen button — make it always findable ─────────── */
+/* ── Sidebar collapse / reopen button — must stay visible even when header is hidden ── */
+/* header{visibility:hidden} hides the whole header incl. this button, so we restore it */
 [data-testid="collapsedControl"] {
-    background:#4f46e5 !important;
+    visibility:visible !important;
     opacity:1 !important;
+    pointer-events:auto !important;
+    background:#4f46e5 !important;
     border-radius:0 8px 8px 0 !important;
-    width:28px !important;
+    min-width:28px !important;
+    min-height:40px !important;
     display:flex !important;
     align-items:center !important;
     justify-content:center !important;
+    position:fixed !important;
+    left:0 !important;
+    top:50vh !important;
+    z-index:99999 !important;
+    box-shadow:2px 0 8px rgba(79,70,229,.35) !important;
+    cursor:pointer !important;
+    border:none !important;
 }
 [data-testid="collapsedControl"] svg,
 [data-testid="collapsedControl"] svg path {
+    visibility:visible !important;
     fill:#ffffff !important;
     stroke:#ffffff !important;
-}
-/* The close-sidebar chevron inside the open sidebar */
-[data-testid="stSidebar"] button[aria-label="Close sidebar"] svg,
-[data-testid="stSidebar"] button[kind="header"] svg {
-    color:#111827 !important;
-    fill:#111827 !important;
+    color:#ffffff !important;
 }
 </style>
 """, unsafe_allow_html=True)
