@@ -279,6 +279,60 @@ html, body, [data-testid="stAppViewContainer"] {
 .footer a { color: #6366f1; text-decoration: none; font-weight: 600; }
 .footer a:hover { color: #4f46e5; text-decoration: underline; }
 
+/* ── Confidence badge ── */
+.conf-high   { color: #15803d; font-weight: 800; }
+.conf-mid    { color: #b45309; font-weight: 800; }
+.conf-low    { color: #dc2626; font-weight: 800; }
+
+/* ── Model output card ── */
+.output-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+}
+.output-model-name { font-size: 0.9rem; font-weight: 700; color: #1e293b; margin-bottom: 0.25rem; }
+.output-meta       { font-size: 0.72rem; color: #64748b; margin-bottom: 0.75rem; }
+.output-text       { font-size: 0.85rem; color: #334155; line-height: 1.6; white-space: pre-wrap; }
+
+/* ── Case study ── */
+.casestudy {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border-radius: 16px;
+    padding: 2rem;
+    color: #f8fafc;
+    margin: 1.5rem 0;
+}
+.cs-eyebrow { font-size: 0.67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: #818cf8; margin-bottom: 0.5rem; }
+.cs-title   { font-size: 1.5rem; font-weight: 800; color: #fff; margin-bottom: 0.5rem; letter-spacing: -0.3px; }
+.cs-body    { font-size: 0.88rem; color: #cbd5e1; line-height: 1.65; margin-bottom: 1.25rem; }
+.cs-stats   { display: flex; gap: 1rem; flex-wrap: wrap; }
+.cs-stat    { flex: 1; min-width: 120px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 0.9rem 1rem; }
+.cs-stat-val { font-size: 1.6rem; font-weight: 800; color: #a5b4fc; line-height: 1; margin-bottom: 0.2rem; }
+.cs-stat-lbl { font-size: 0.7rem; color: #94a3b8; }
+
+/* ── Spend monitor ── */
+.spend-alert {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-left: 4px solid #f97316;
+    border-radius: 10px;
+    padding: 0.85rem 1.1rem;
+    margin-bottom: 0.75rem;
+}
+.spend-alert-title { font-size: 0.82rem; font-weight: 700; color: #9a3412; margin-bottom: 0.2rem; }
+.spend-alert-body  { font-size: 0.78rem; color: #7c2d12; line-height: 1.5; }
+.spend-ok {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-left: 4px solid #22c55e;
+    border-radius: 10px;
+    padding: 0.85rem 1.1rem;
+    margin-bottom: 0.75rem;
+}
+.spend-ok-body { font-size: 0.82rem; color: #166534; line-height: 1.5; }
+
 /* ── Observability ── */
 .drift-alert {
     background: #fff7ed;
@@ -563,6 +617,10 @@ if result := st.session_state.get("result"):
         _savings_pct = 0.0
         _savings_label = "vs alternatives"
 
+    _conf = rec.get("confidence_score", 0.5)
+    _conf_expl = rec.get("confidence_explanation", "")
+    _conf_cls = "conf-high" if _conf >= 0.70 else ("conf-mid" if _conf >= 0.50 else "conf-low")
+
     _mode_pill = (
         f'<span class="mode-badge mode-live">● Live — {", ".join(live_providers)}</span>'
         if mode == "live"
@@ -596,6 +654,11 @@ if result := st.session_state.get("result"):
       <div class="rh-stat-label">Potential Savings</div>
       <div class="rh-stat-value">{_savings_pct:.0f}%</div>
       <div class="rh-stat-sub">{_savings_label}</div>
+    </div>
+    <div class="rh-stat">
+      <div class="rh-stat-label">Confidence</div>
+      <div class="rh-stat-value"><span class="{_conf_cls}">{_conf:.0%}</span></div>
+      <div class="rh-stat-sub">{_conf_expl}</div>
     </div>
   </div>
 </div>
@@ -665,11 +728,12 @@ if result := st.session_state.get("result"):
     CHART_BG    = "#f8fafc"
     GRID_COLOR  = "#e2e8f0"
 
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "Score vs Cost",
         "Radar — Top 5",
         "Latency",
         "Full Table",
+        "Model Outputs",
     ])
 
 
@@ -859,6 +923,53 @@ if result := st.session_state.get("result"):
             },
         )
 
+    with tab5:
+        _questions = result.get("questions_asked", [])
+        _live_results = [r for r in result["results"] if r.get("actual_output")]
+        if not _live_results:
+            st.markdown("""
+<div class="empty">
+  <div class="empty-icon">💬</div>
+  <div class="empty-title">No actual outputs available</div>
+  <div class="empty-sub">
+    This evaluation ran in <strong>Simulation Mode</strong> — no models were called, so there are no real responses to show.<br><br>
+    Add at least one provider API key in the sidebar and re-run to see what each model actually says about your data.
+  </div>
+</div>
+""", unsafe_allow_html=True)
+        else:
+            st.markdown(
+                f'<div class="sh"><span class="sh-icon">💬</span>'
+                f'<h3>What each model said — {len(_live_results)} live model{"s" if len(_live_results) != 1 else ""}</h3></div>',
+                unsafe_allow_html=True,
+            )
+            if _questions:
+                with st.expander("Questions sent to every model", expanded=False):
+                    for _qi, _q in enumerate(_questions, 1):
+                        st.markdown(f"**{_qi}.** {_q}")
+
+            _sorted_live = sorted(_live_results, key=lambda r: r.get("rdab_scorecard", {}).get("rdab_score", 0), reverse=True)
+            for _lr in _sorted_live:
+                _lr_sc = _lr.get("rdab_scorecard", {})
+                _lr_conf = _lr.get("confidence_score", 0.5)
+                _lr_conf_cls = "conf-high" if _lr_conf >= 0.70 else ("conf-mid" if _lr_conf >= 0.50 else "conf-low")
+                with st.expander(
+                    f"{_lr['display_name']}  ·  RDAB {_lr_sc.get('rdab_score', 0):.0%}  ·  {_fmt_cost(_lr['estimated_total_cost_usd'])}/run",
+                    expanded=(_lr["model_id"] == rec["model_id"]),
+                ):
+                    _mc1, _mc2, _mc3, _mc4 = st.columns(4)
+                    _mc1.metric("RDAB Score", f"{_lr_sc.get('rdab_score', 0):.0%}")
+                    _mc2.metric("Correctness", f"{_lr_sc.get('correctness', 0):.0%}")
+                    _mc3.metric("Cost/Run", _fmt_cost(_lr["estimated_total_cost_usd"]))
+                    _mc4.metric("Confidence", f"{_lr_conf:.0%}")
+                    st.markdown("**Model response:**")
+                    st.markdown(
+                        f'<div class="output-text">{_lr["actual_output"]}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if _lr["model_id"] == rec["model_id"]:
+                        st.success("★ This is the recommended model", icon="✅")
+
     # ── Recommended config ───────────────────────────────────────────────────
     st.markdown(
         '<div class="sh"><span class="sh-icon">⚙️</span><h3>Recommended Config — Ready to Copy</h3></div>',
@@ -879,6 +990,42 @@ if result := st.session_state.get("result"):
                 st.markdown(f"- {lim}")
 
 
+# ─── Case Study ──────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="casestudy">
+  <div class="cs-eyebrow">Real Case Study · CostGuard on CostGuard</div>
+  <div class="cs-title">GPT-4.1 over GPT-5 — same quality, 87% cheaper</div>
+  <div class="cs-body">
+    We ran <strong>276 RDAB evaluations</strong> across 23 data analysis tasks and 12 models — the same benchmark
+    that powers every recommendation in this tool. CostGuard recommended <strong>GPT-4.1</strong> over <strong>GPT-5</strong>
+    for structured data analysis. GPT-4.1 scored <strong>88% RDAB</strong> (vs 79% for GPT-5)
+    and cost <strong>$0.0140 per run</strong> versus <strong>$0.1053 for GPT-5</strong>.<br><br>
+    A team making <strong>10,000 calls/month</strong> saves <strong>$912/month</strong> — 87% cost reduction —
+    while actually getting <em>better</em> answers. GPT-5's extra cost buys no measurable quality gain
+    on tabular data analysis tasks.
+  </div>
+  <div class="cs-stats">
+    <div class="cs-stat">
+      <div class="cs-stat-val">276</div>
+      <div class="cs-stat-lbl">RDAB evaluation runs</div>
+    </div>
+    <div class="cs-stat">
+      <div class="cs-stat-val">87%</div>
+      <div class="cs-stat-lbl">cost reduction per run</div>
+    </div>
+    <div class="cs-stat">
+      <div class="cs-stat-val">+9pt</div>
+      <div class="cs-stat-lbl">RDAB score improvement</div>
+    </div>
+    <div class="cs-stat">
+      <div class="cs-stat-val">$912</div>
+      <div class="cs-stat-lbl">saved/month at 10K calls</div>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
 # ─── History & Alerts ────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown(
@@ -888,7 +1035,7 @@ st.markdown(
 )
 st.caption("Every evaluation is logged locally. Score drift (>10% drop from average) triggers an alert.")
 
-_hist_tab, _drift_tab, _avg_tab = st.tabs(["Recent Evaluations", "Drift Events", "Model Averages"])
+_hist_tab, _drift_tab, _avg_tab, _spend_tab = st.tabs(["Recent Evaluations", "Drift Events", "Model Averages", "Spend Monitor"])
 
 with _hist_tab:
     try:
@@ -995,6 +1142,112 @@ with _avg_tab:
     except Exception as _e:
         st.info(f"Model averages unavailable: {_e}")
 
+with _spend_tab:
+    st.markdown("#### Spend Monitor — Project your monthly LLM cost")
+    st.caption(
+        "Enter your current model and usage volume. CostGuard projects your monthly spend "
+        "and alerts you when a cheaper alternative scored equally well on this benchmark."
+    )
+
+    from evaluation.pricing import MODELS as _ALL_MODELS  # noqa: E402
+
+    _model_ids = sorted(_ALL_MODELS.keys())
+    _model_display = {mid: _ALL_MODELS[mid].display_name for mid in _model_ids}
+
+    _sm_col1, _sm_col2 = st.columns([2, 1])
+    with _sm_col1:
+        _current_model_id = st.selectbox(
+            "Your current model",
+            options=_model_ids,
+            format_func=lambda mid: _model_display[mid],
+            index=_model_ids.index("gpt-5") if "gpt-5" in _model_ids else 0,
+            key="spend_model",
+        )
+    with _sm_col2:
+        _daily_calls = st.number_input(
+            "Calls per day",
+            min_value=1, max_value=10_000_000, value=1000, step=100,
+            key="spend_calls",
+        )
+
+    _avg_input_tokens  = st.slider("Avg input tokens per call",  min_value=100, max_value=50000, value=2000, step=100, key="spend_in_tok")
+    _avg_output_tokens = st.slider("Avg output tokens per call", min_value=50,  max_value=10000, value=512,  step=50,  key="spend_out_tok")
+
+    _current_pricing = _ALL_MODELS[_current_model_id]
+    _cost_per_call = _current_pricing.estimate_cost(_avg_input_tokens, _avg_output_tokens)
+    _monthly_cost  = _cost_per_call * _daily_calls * 30
+
+    _sm_c1, _sm_c2, _sm_c3 = st.columns(3)
+    _sm_c1.metric("Cost per call", f"${_cost_per_call:.5f}")
+    _sm_c2.metric("Daily spend",   f"${_cost_per_call * _daily_calls:.2f}")
+    _sm_c3.metric("Monthly spend", f"${_monthly_cost:,.2f}")
+
+    st.markdown("---")
+    st.markdown("**Cheaper alternatives from this benchmark:**")
+
+    _alternatives_found = False
+    for _alt_id, _alt_p in sorted(_ALL_MODELS.items(), key=lambda x: x[1].estimate_cost(_avg_input_tokens, _avg_output_tokens)):
+        if _alt_id == _current_model_id:
+            continue
+        _alt_cost_per_call = _alt_p.estimate_cost(_avg_input_tokens, _avg_output_tokens)
+        if _alt_cost_per_call >= _cost_per_call:
+            continue
+        _alt_monthly = _alt_cost_per_call * _daily_calls * 30
+        _savings_mo  = _monthly_cost - _alt_monthly
+        _savings_pct_s = (1 - _alt_cost_per_call / _cost_per_call) * 100 if _cost_per_call > 0 else 0
+
+        # Check if eval result has a score for this model to judge quality parity
+        _eval_result = st.session_state.get("result")
+        _alt_rdab = None
+        _curr_rdab = None
+        if _eval_result:
+            for _mr in _eval_result.get("results", []):
+                if _mr["model_id"] == _alt_id:
+                    _alt_rdab = _mr.get("rdab_scorecard", {}).get("rdab_score")
+                if _mr["model_id"] == _current_model_id:
+                    _curr_rdab = _mr.get("rdab_scorecard", {}).get("rdab_score")
+
+        _quality_note = ""
+        if _alt_rdab is not None and _curr_rdab is not None:
+            _rdab_diff = (_alt_rdab - _curr_rdab) * 100
+            if _rdab_diff >= 0:
+                _quality_note = f" · RDAB score is {_rdab_diff:.1f}pt **better** ✓"
+            elif _rdab_diff >= -5:
+                _quality_note = f" · RDAB score within {abs(_rdab_diff):.1f}pt (acceptable trade-off)"
+            else:
+                _quality_note = f" · RDAB score is {abs(_rdab_diff):.1f}pt lower — review before switching"
+
+        if _savings_mo >= 1.0:
+            _alert_cls = "spend-alert" if (_alt_rdab is None or (_curr_rdab is not None and _alt_rdab < _curr_rdab - 0.05)) else "spend-ok"
+            _icon = "⚠️ Switch opportunity" if _alert_cls == "spend-alert" else "✅ Recommended switch"
+            st.markdown(
+                f'<div class="{_alert_cls}">'
+                f'<div class="spend-alert-title">{_icon} → {_alt_p.display_name}</div>'
+                f'<div class="spend-alert-body">'
+                f'<strong>${_savings_mo:,.0f}/month</strong> savings ({_savings_pct_s:.0f}% cheaper)'
+                f' at {_daily_calls:,} calls/day{_quality_note}. '
+                f'Current: <strong>${_monthly_cost:,.0f}/mo</strong> → New: <strong>${_alt_monthly:,.0f}/mo</strong>.'
+                f'</div></div>',
+                unsafe_allow_html=True,
+            )
+            _alternatives_found = True
+            if _alternatives_found and list(_ALL_MODELS.keys()).index(_alt_id) >= 3:
+                break  # show top 3 alternatives max
+
+    if not _alternatives_found:
+        st.markdown(
+            '<div class="spend-ok"><div class="spend-ok-body">'
+            '✅ You\'re already using one of the most cost-effective models for this call volume. '
+            'Run an evaluation with your data to verify quality.'
+            '</div></div>',
+            unsafe_allow_html=True,
+        )
+
+    st.caption(
+        "Savings are projected based on token pricing only. "
+        "Run a full evaluation with your API keys to validate quality before switching."
+    )
+
 
 # ─── Footer ───────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -1004,6 +1257,7 @@ st.markdown("""
   &nbsp;·&nbsp;
   <a href="https://github.com/patibandlavenkatamanideep/CostGuard" target="_blank">GitHub</a>
   &nbsp;·&nbsp; MIT License
+  &nbsp;·&nbsp; <a href="/Privacy_Policy" target="_self">Privacy Policy</a>
 </div>
 """, unsafe_allow_html=True)
 

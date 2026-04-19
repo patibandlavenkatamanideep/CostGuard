@@ -414,6 +414,56 @@ def _simulate_scorecard(
     return sc, round(latency, 1)
 
 
+# ─── Confidence scoring ──────────────────────────────────────────────────────
+
+def _compute_confidence(
+    scorecard: RDABScoreCard,
+    num_questions: int,
+    is_live: bool,
+) -> tuple[float, str]:
+    """
+    Compute a 0–1 confidence score for a model recommendation.
+    Factors: evaluation mode (live vs simulation), question count, score variance.
+    """
+    import statistics as _stats
+
+    # Base: simulation is calibrated from 276 RDAB runs but not from your data
+    score = 0.60 if is_live else 0.40
+    mode_note = "live benchmark" if is_live else "simulation"
+
+    # More questions = more evidence = higher confidence (up to +0.15)
+    score += min(num_questions / 10.0, 1.0) * 0.15
+
+    # High variance across the 4 dimensions slightly reduces confidence
+    # (stat_validity is structurally low for all models, so cap the penalty)
+    dims = [
+        scorecard.correctness,
+        scorecard.code_quality,
+        scorecard.efficiency,
+        scorecard.stat_validity,
+    ]
+    variance = _stats.stdev(dims) if len(dims) > 1 else 0.0
+    score -= min(variance * 0.18, 0.07)
+
+    score = max(0.15, min(0.95, score))
+    # Round to nearest 5%
+    score = round(score * 20) / 20
+
+    parts = [mode_note]
+    if num_questions >= 8:
+        parts.append(f"{num_questions} questions")
+    elif num_questions >= 5:
+        parts.append(f"{num_questions} questions")
+    else:
+        parts.append(f"{num_questions} questions — add more for higher confidence")
+    if variance < 0.10:
+        parts.append("consistent scores")
+    elif variance > 0.25:
+        parts.append("high score variance")
+
+    return score, " · ".join(parts)
+
+
 # ─── Per-model evaluation ─────────────────────────────────────────────────────
 
 async def _evaluate_model(
@@ -446,11 +496,14 @@ async def _evaluate_model(
 
     latency_ms: float
     rdab_scorecard: RDABScoreCard
+    actual_output: str | None = None
 
     if RDAB_AVAILABLE and pricing.provider in live_providers:
         try:
             result, latency_ms = await _run_rdab_agent(pricing, task_dict, df, api_keys=merged_env)
             rdab_scorecard = _rdab_score(task_dict, result)
+            raw_answer = result.get("final_answer", "") or ""
+            actual_output = raw_answer.strip() if raw_answer.strip() else None
             logger.info(
                 f"[RDAB live] {pricing.model_id}: "
                 f"score={rdab_scorecard.rdab_score:.3f} lat={latency_ms:.0f}ms"
@@ -464,6 +517,10 @@ async def _evaluate_model(
         reason = "RDAB not installed" if not RDAB_AVAILABLE else f"no API key for '{pricing.provider}'"
         logger.info(f"[RDAB sim] {pricing.model_id} ({reason})")
         rdab_scorecard, latency_ms = _simulate_scorecard(pricing, dataset_fingerprint=dataset_fingerprint)
+
+    confidence, conf_explanation = _compute_confidence(
+        rdab_scorecard, len(questions), is_live=not rdab_scorecard.simulated
+    )
 
     total_cost = pricing.estimate_cost(input_tokens, output_tokens)
 
@@ -498,6 +555,9 @@ async def _evaluate_model(
         strengths=list(pricing.strengths),
         limitations=list(pricing.limitations),
         config_snippet=config_snippet,
+        actual_output=actual_output,
+        confidence_score=confidence,
+        confidence_explanation=conf_explanation,
     )
 
 
@@ -625,6 +685,7 @@ async def run_evaluation(
         "total_eval_duration_s": duration_s,
         "recommendation_reason": reason,
         "copyable_config": copyable_config,
+        "questions_asked": questions,
     }
 
     # ── Layer 4: log to observability store (non-blocking) ────────────────────

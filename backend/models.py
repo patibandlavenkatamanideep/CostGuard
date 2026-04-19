@@ -69,6 +69,11 @@ class ModelResult(BaseModel):
     strengths: list[str]
     limitations: list[str]
     config_snippet: dict[str, Any]
+    # Actual model output text (populated in live mode only)
+    actual_output: str | None = None
+    # Confidence in this model's score (0–1); based on mode, question count, score variance
+    confidence_score: float = Field(default=0.5, ge=0, le=1)
+    confidence_explanation: str = ""
 
 
 class EvalRequest(BaseModel):
@@ -142,6 +147,10 @@ class EvalResponse(BaseModel):
     total_eval_duration_s: float
     recommendation_reason: str
     copyable_config: str  # JSON string of the recommended config
+    questions_asked: list[str] = Field(
+        default_factory=list,
+        description="Evaluation questions sent to each model",
+    )
 
 
 class HealthResponse(BaseModel):
