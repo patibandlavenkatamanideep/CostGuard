@@ -105,6 +105,16 @@ html,body,[data-testid="stAppViewContainer"]{
 .sb-brand{font-size:1rem;font-weight:800;color:#111827;margin:0}
 .sb-tagline{font-size:.7rem;color:#9ca3af;margin:0 0 1.25rem}
 .sb-section{font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;margin:1rem 0 .35rem}
+.sb-mode-live{background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:.6rem .875rem;margin-bottom:.5rem;font-size:.78rem;font-weight:600;color:#3730a3}
+.sb-mode-sim{background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:.6rem .875rem;margin-bottom:.5rem;font-size:.78rem;color:#6b7280}
+.sb-provider{display:flex;align-items:center;justify-content:space-between;margin-bottom:.15rem}
+.sb-provider-label{font-size:.78rem;font-weight:600;color:#374151}
+.sb-provider-link{font-size:.68rem;color:#4f46e5;text-decoration:none;font-weight:600}
+.sb-provider-link:hover{text-decoration:underline}
+.sb-dot-live{display:inline-block;width:7px;height:7px;background:#4f46e5;border-radius:50%;margin-right:.35rem;vertical-align:middle}
+.sb-dot-sim{display:inline-block;width:7px;height:7px;background:#d1d5db;border-radius:50%;margin-right:.35rem;vertical-align:middle}
+.sb-live-summary{font-size:.72rem;color:#4338ca;font-weight:600;margin:.5rem 0 0}
+.sb-sim-summary{font-size:.72rem;color:#9ca3af;margin:.5rem 0 0}
 
 /* Empty state */
 .empty{text-align:center;padding:2.5rem 1rem}
@@ -220,62 +230,104 @@ def _make_sample_products() -> bytes:
 
 
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
+
+# Key state: use session_state so Clear button actually works
+_KEY_FIELDS = ["sb_anthropic", "sb_openai", "sb_groq", "sb_gemini", "sb_xai"]
+for _k in _KEY_FIELDS:
+    if _k not in st.session_state:
+        st.session_state[_k] = ""
+
 with st.sidebar:
     st.markdown('<p class="sb-brand">CostGuard</p>', unsafe_allow_html=True)
     st.markdown('<p class="sb-tagline">LLM Cost Intelligence</p>', unsafe_allow_html=True)
 
+    # ── Mode indicator ────────────────────────────────────────────────────────
+    _any_key_ss = any(st.session_state[k].strip() for k in _KEY_FIELDS)
+    if _any_key_ss:
+        _live_providers_ss = [n for n, k in [
+            ("Anthropic", "sb_anthropic"), ("OpenAI", "sb_openai"),
+            ("Groq", "sb_groq"), ("Google", "sb_gemini"), ("xAI", "sb_xai"),
+        ] if st.session_state[k].strip()]
+        st.markdown(
+            f'<div class="sb-mode-live">● Live Mode — {", ".join(_live_providers_ss)}</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="sb-mode-sim">◎ Simulation Mode — no API keys entered</div>',
+            unsafe_allow_html=True,
+        )
+
+    st.divider()
+
+    # ── Task config ───────────────────────────────────────────────────────────
     st.markdown('<p class="sb-section">Task Description</p>', unsafe_allow_html=True)
     task_description = st.text_area(
         "Task",
         value="Analyze this dataset and answer questions about it.",
-        height=80,
-        help="Describe what you want to do with the data — e.g. 'Predict churn', 'Find outliers'.",
+        height=68,
+        help="Describe what you want to do — e.g. 'Predict churn', 'Find outliers'.",
         label_visibility="collapsed",
     )
 
     st.markdown('<p class="sb-section">Evaluation Depth</p>', unsafe_allow_html=True)
     num_questions = st.slider(
-        "Questions",
-        min_value=1, max_value=10, value=5,
-        help="More questions → more accurate benchmark, slightly longer runtime.",
+        "Questions", min_value=1, max_value=10, value=5,
+        help="More questions = more accurate benchmark, slightly longer runtime.",
         label_visibility="collapsed",
     )
 
     st.divider()
 
-    st.markdown('<p class="sb-section">API Keys — Live Mode (optional)</p>', unsafe_allow_html=True)
-    st.caption("Keys are used only for this session and never stored.")
+    # ── API Keys — always visible ─────────────────────────────────────────────
+    st.markdown('<p class="sb-section">API Keys — enables Live Mode</p>', unsafe_allow_html=True)
+    st.caption("Session-only. Never stored. One key is enough — the rest fall back to simulation.")
 
-    with st.expander("Enter API keys", expanded=False):
-        anthropic_key = st.text_input("Anthropic (Claude)", type="password", placeholder="sk-ant-...")
-        openai_key    = st.text_input("OpenAI (GPT)",        type="password", placeholder="sk-...")
-        groq_key      = st.text_input("Groq (Llama)",        type="password", placeholder="gsk_...")
-        gemini_key    = st.text_input("Google (Gemini)",     type="password", placeholder="AIza...")
-        xai_key       = st.text_input("xAI (Grok)",          type="password", placeholder="xai-...")
-        if st.button("Clear all keys", use_container_width=True):
-            st.rerun()
+    _providers = [
+        ("Anthropic", "sb_anthropic", "sk-ant-...", "https://console.anthropic.com/settings/keys",  "Claude models"),
+        ("OpenAI",    "sb_openai",    "sk-...",      "https://platform.openai.com/api-keys",         "GPT models"),
+        ("Groq",      "sb_groq",      "gsk_...",     "https://console.groq.com/keys",                "Llama models"),
+        ("Google",    "sb_gemini",    "AIza...",     "https://aistudio.google.com/apikey",           "Gemini models"),
+        ("xAI",       "sb_xai",       "xai-...",     "https://console.x.ai/",                        "Grok models"),
+    ]
 
+    for _pname, _pkey, _placeholder, _plink, _pmodels in _providers:
+        _is_set = bool(st.session_state[_pkey].strip())
+        _dot = '<span class="sb-dot-live"></span>' if _is_set else '<span class="sb-dot-sim"></span>'
+        st.markdown(
+            f'<div class="sb-provider">'
+            f'<span class="sb-provider-label">{_dot}{_pname}</span>'
+            f'<a class="sb-provider-link" href="{_plink}" target="_blank">Get key →</a>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        st.text_input(
+            f"{_pname} key",
+            type="password",
+            placeholder=_placeholder,
+            key=_pkey,
+            label_visibility="collapsed",
+            help=f"{_pmodels} · {_plink}",
+        )
+
+    if st.button("Clear all keys", use_container_width=True):
+        for _k in _KEY_FIELDS:
+            st.session_state[_k] = ""
+        st.rerun()
+
+    # ── Build SessionKeys from state ──────────────────────────────────────────
     session_keys = SessionKeys(
-        anthropic_api_key=anthropic_key or None,
-        openai_api_key=openai_key or None,
-        groq_api_key=groq_key or None,
-        xai_api_key=xai_key or None,
-        gemini_api_key=gemini_key or None,
+        anthropic_api_key=st.session_state["sb_anthropic"].strip() or None,
+        openai_api_key=st.session_state["sb_openai"].strip() or None,
+        groq_api_key=st.session_state["sb_groq"].strip() or None,
+        gemini_api_key=st.session_state["sb_gemini"].strip() or None,
+        xai_api_key=st.session_state["sb_xai"].strip() or None,
     )
     any_key = session_keys.has_any_key()
 
-    if any_key:
-        live_names = [n for n, v in [
-            ("Anthropic", anthropic_key), ("OpenAI", openai_key),
-            ("Groq", groq_key), ("Google", gemini_key), ("xAI", xai_key),
-        ] if v and v.strip()]
-        st.success(f"Live Mode active — {', '.join(live_names)}")
-    else:
-        st.info("Simulation Mode — no keys required")
-
     st.divider()
     st.markdown('<p class="sb-section">Models Covered</p>', unsafe_allow_html=True)
-    st.caption("Claude Sonnet · Opus · Haiku  \nGPT-5 · 4.1 · 4o · 4o-mini  \nGemini 2.5 Pro · Flash  \nLlama 3.3 70B · Mixtral  \nGrok-3 · Grok-3 mini")
+    st.caption("Claude Sonnet · Opus · Haiku\nGPT-5 · 4.1 · 4o · 4o-mini\nGemini 2.5 Pro · Flash\nLlama 3.3 70B · Grok-3")
 
 
 # ─── Hero ─────────────────────────────────────────────────────────────────────
@@ -359,7 +411,15 @@ if active_file:
     filename, file_bytes = active_file
     size_kb = len(file_bytes) / 1024
     size_str = f"{size_kb / 1024:.1f} MB" if size_kb > 1024 else f"{size_kb:.1f} KB"
-    st.caption(f"📄 **{filename}** — {size_str}")
+    st.caption(f"**{filename}** — {size_str}")
+
+    if not any_key:
+        st.markdown("""
+<div style="background:#eef2ff;border:1px solid #c7d2fe;border-left:3px solid #4f46e5;border-radius:8px;padding:.75rem 1rem;margin:.5rem 0;font-size:.82rem;color:#3730a3">
+  <strong>Simulation Mode active.</strong>
+  Scores are from the RDAB benchmark leaderboard — not from live inference on your data.<br>
+  Enter at least one API key in the sidebar to run real models on your actual file.
+</div>""", unsafe_allow_html=True)
 
     mode_label = (
         "Running live benchmark across 12 models — this takes 1–3 minutes…"
@@ -688,11 +748,14 @@ if result := st.session_state.get("result"):
             "rdab_score", "correctness", "code_quality", "efficiency", "stat_validity",
             "latency_ms", "estimated_total_cost_usd",
             "input_cost_per_1k", "output_cost_per_1k",
+            "simulated",
         ]].copy()
+        tbl["Mode"] = tbl["simulated"].map(lambda s: "Simulation" if s else "Live")
+        tbl = tbl.drop(columns=["simulated"])
         tbl.columns = [
             "Model", "Provider", "Tier",
             "RDAB", "Correctness", "Code Quality", "Efficiency", "Stat Validity",
-            "Latency (ms)", "Cost/Run ($)", "Input $/1K", "Output $/1K",
+            "Latency (ms)", "Cost/Run ($)", "Input $/1K", "Output $/1K", "Mode",
         ]
         for col in ["RDAB", "Correctness", "Code Quality", "Efficiency", "Stat Validity"]:
             tbl[col] = tbl[col].map("{:.1%}".format)
@@ -705,6 +768,7 @@ if result := st.session_state.get("result"):
             column_config={
                 "Provider": st.column_config.TextColumn(width="small"),
                 "Tier":     st.column_config.TextColumn(width="small"),
+                "Mode":     st.column_config.TextColumn(width="small"),
             },
         )
 
