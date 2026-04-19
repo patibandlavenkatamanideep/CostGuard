@@ -185,10 +185,10 @@ html,body,[data-testid="stAppViewContainer"]{
     color:#4f46e5 !important;
 }
 
-/* ── Sidebar toggle buttons — dark navy so always findable ──────────────── */
+/* ── Sidebar toggle buttons — black so always findable ──────────────────── */
 [data-testid="collapsedControl"],
 [data-testid="stSidebarCollapsedControl"] {
-    background:#111827 !important;
+    background:#000000 !important;
     border-radius:0 8px 8px 0 !important;
     opacity:1 !important;
 }
