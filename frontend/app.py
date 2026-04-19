@@ -160,6 +160,46 @@ html,body,[data-testid="stAppViewContainer"]{
 .footer{text-align:center;color:#6b7280;font-size:.75rem;padding:1.5rem 0 .5rem;border-top:1px solid #f3f4f6;margin-top:2rem}
 .footer a{color:#4f46e5;text-decoration:none;font-weight:600}
 .footer a:hover{text-decoration:underline}
+
+/* ── Sidebar navigation links — force high contrast ────────────────────── */
+[data-testid="stSidebarNav"] a,
+[data-testid="stSidebarNav"] span,
+[data-testid="stSidebarNavItems"] a,
+[data-testid="stSidebarNavItems"] span,
+[data-testid="stSidebarNavItems"] p {
+    color:#111827 !important;
+    font-weight:600 !important;
+    opacity:1 !important;
+}
+[data-testid="stSidebarNav"] a:hover span,
+[data-testid="stSidebarNavItems"] a:hover span {
+    color:#4f46e5 !important;
+}
+[data-testid="stSidebarNavItems"] li[aria-selected="true"] span {
+    color:#4f46e5 !important;
+}
+
+/* ── Sidebar collapse / reopen button — make it always findable ─────────── */
+[data-testid="collapsedControl"] {
+    background:#4f46e5 !important;
+    opacity:1 !important;
+    border-radius:0 8px 8px 0 !important;
+    width:28px !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+}
+[data-testid="collapsedControl"] svg,
+[data-testid="collapsedControl"] svg path {
+    fill:#ffffff !important;
+    stroke:#ffffff !important;
+}
+/* The close-sidebar chevron inside the open sidebar */
+[data-testid="stSidebar"] button[aria-label="Close sidebar"] svg,
+[data-testid="stSidebar"] button[kind="header"] svg {
+    color:#111827 !important;
+    fill:#111827 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -623,7 +663,7 @@ if result := st.session_state.get("result"):
         r["simulated"]    = sc_r.get("simulated", True)
     df_models = pd.DataFrame(results_raw)
 
-    TIER_COLORS = {"premium": "#4f46e5", "balanced": "#818cf8", "economy": "#c7d2fe"}
+    TIER_COLORS = {"premium": "#4f46e5", "balanced": "#6366f1", "economy": "#818cf8"}
     CHART_BG    = "#ffffff"
     GRID_COLOR  = "#f3f4f6"
 
@@ -651,7 +691,6 @@ if result := st.session_state.get("result"):
             y="rdab_score",
             text="display_name",
             color="tier",
-            size=[30] * len(df_plot),
             color_discrete_map=TIER_COLORS,
             labels={
                 "plot_cost": "Cost per Run (USD) — log scale",
@@ -661,8 +700,10 @@ if result := st.session_state.get("result"):
             title="RDAB Score vs Estimated Cost — top-left corner is best value",
         )
         fig.update_traces(
+            marker=dict(size=16, opacity=1.0, line=dict(width=2, color="#ffffff")),
             textposition="top center",
             textfont=dict(size=12, color="#111827", family="Inter"),
+            selector=dict(type="scatter"),
         )
         # Explicit star marker so the recommended model is always visible
         # even if the annotation arrow lands slightly off due to floating-point.
@@ -709,7 +750,7 @@ if result := st.session_state.get("result"):
     with tab2:
         top5   = df_models.nlargest(5, "rdab_score")
         cats   = ["Correctness", "Code Quality", "Efficiency", "Stat Validity"]
-        colors = ["#4f46e5", "#6366f1", "#818cf8", "#a5b4fc", "#c7d2fe"]
+        colors = ["#4f46e5", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444"]
         radar  = go.Figure()
         for i, (_, row) in enumerate(top5.iterrows()):
             vals = [row["correctness"], row["code_quality"], row["efficiency"], row["stat_validity"]]
@@ -720,8 +761,8 @@ if result := st.session_state.get("result"):
                 name=row["display_name"],
                 line_color=colors[i % len(colors)],
                 fillcolor=colors[i % len(colors)],
-                opacity=0.35,
-                line_width=2.5,
+                opacity=0.55,
+                line_width=3,
             ))
         radar.update_layout(
             polar=dict(
