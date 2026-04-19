@@ -229,34 +229,31 @@ def _make_sample_products() -> bytes:
     return df.to_csv(index=False).encode()
 
 
-# ─── Sidebar ──────────────────────────────────────────────────────────────────
-
-# Key state: use session_state so Clear button actually works
+# ─── Sidebar state ────────────────────────────────────────────────────────────
 _KEY_FIELDS = ["sb_anthropic", "sb_openai", "sb_groq", "sb_gemini", "sb_xai"]
 for _k in _KEY_FIELDS:
     if _k not in st.session_state:
         st.session_state[_k] = ""
+if "show_live_form" not in st.session_state:
+    st.session_state["show_live_form"] = False
+
+_providers = [
+    ("Anthropic", "sb_anthropic", "sk-ant-...", "https://console.anthropic.com/settings/keys",  "Claude models"),
+    ("OpenAI",    "sb_openai",    "sk-...",      "https://platform.openai.com/api-keys",         "GPT models"),
+    ("Groq",      "sb_groq",      "gsk_...",     "https://console.groq.com/keys",                "Llama models"),
+    ("Google",    "sb_gemini",    "AIza...",     "https://aistudio.google.com/apikey",           "Gemini models"),
+    ("xAI",       "sb_xai",       "xai-...",     "https://console.x.ai/",                        "Grok models"),
+]
+
+# Determine live state before rendering sidebar
+_any_key_ss = any(st.session_state[k].strip() for k in _KEY_FIELDS)
+# Auto-show form if a key is present
+if _any_key_ss:
+    st.session_state["show_live_form"] = True
 
 with st.sidebar:
     st.markdown('<p class="sb-brand">CostGuard</p>', unsafe_allow_html=True)
     st.markdown('<p class="sb-tagline">LLM Cost Intelligence</p>', unsafe_allow_html=True)
-
-    # ── Mode indicator ────────────────────────────────────────────────────────
-    _any_key_ss = any(st.session_state[k].strip() for k in _KEY_FIELDS)
-    if _any_key_ss:
-        _live_providers_ss = [n for n, k in [
-            ("Anthropic", "sb_anthropic"), ("OpenAI", "sb_openai"),
-            ("Groq", "sb_groq"), ("Google", "sb_gemini"), ("xAI", "sb_xai"),
-        ] if st.session_state[k].strip()]
-        st.markdown(
-            f'<div class="sb-mode-live">● Live Mode — {", ".join(_live_providers_ss)}</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            '<div class="sb-mode-sim">◎ Simulation Mode — no API keys entered</div>',
-            unsafe_allow_html=True,
-        )
 
     st.divider()
 
@@ -279,41 +276,98 @@ with st.sidebar:
 
     st.divider()
 
-    # ── API Keys — always visible ─────────────────────────────────────────────
-    st.markdown('<p class="sb-section">API Keys — enables Live Mode</p>', unsafe_allow_html=True)
-    st.caption("Session-only. Never stored. One key is enough — the rest fall back to simulation.")
-
-    _providers = [
-        ("Anthropic", "sb_anthropic", "sk-ant-...", "https://console.anthropic.com/settings/keys",  "Claude models"),
-        ("OpenAI",    "sb_openai",    "sk-...",      "https://platform.openai.com/api-keys",         "GPT models"),
-        ("Groq",      "sb_groq",      "gsk_...",     "https://console.groq.com/keys",                "Llama models"),
-        ("Google",    "sb_gemini",    "AIza...",     "https://aistudio.google.com/apikey",           "Gemini models"),
-        ("xAI",       "sb_xai",       "xai-...",     "https://console.x.ai/",                        "Grok models"),
-    ]
-
-    for _pname, _pkey, _placeholder, _plink, _pmodels in _providers:
-        _is_set = bool(st.session_state[_pkey].strip())
-        _dot = '<span class="sb-dot-live"></span>' if _is_set else '<span class="sb-dot-sim"></span>'
+    # ── Live Mode section ─────────────────────────────────────────────────────
+    if _any_key_ss:
+        # ── LIVE MODE ACTIVE ──────────────────────────────────────────────────
+        _live_names = [n for n, k, *_ in _providers if st.session_state[k].strip()]
         st.markdown(
-            f'<div class="sb-provider">'
-            f'<span class="sb-provider-label">{_dot}{_pname}</span>'
-            f'<a class="sb-provider-link" href="{_plink}" target="_blank">Get key →</a>'
-            f'</div>',
+            f'<div class="sb-mode-live">● Live Mode active — {", ".join(_live_names)}</div>',
             unsafe_allow_html=True,
         )
-        st.text_input(
-            f"{_pname} key",
-            type="password",
-            placeholder=_placeholder,
-            key=_pkey,
-            label_visibility="collapsed",
-            help=f"{_pmodels} · {_plink}",
-        )
+        st.caption("Real models will run on your data. Keys are session-only and never stored.")
 
-    if st.button("Clear all keys", use_container_width=True):
-        for _k in _KEY_FIELDS:
-            st.session_state[_k] = ""
-        st.rerun()
+        # Show which providers are connected
+        for _pname, _pkey, _, _plink, _pmodels in _providers:
+            _is_set = bool(st.session_state[_pkey].strip())
+            _dot = '<span class="sb-dot-live"></span>' if _is_set else '<span class="sb-dot-sim"></span>'
+            _status = "connected" if _is_set else "not set — simulation"
+            st.markdown(
+                f'<div class="sb-provider">'
+                f'<span class="sb-provider-label">{_dot}{_pname}</span>'
+                f'<span style="font-size:.68rem;color:{"#4f46e5" if _is_set else "#9ca3af"}">{_status}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("")
+        if st.button("Edit API keys", use_container_width=True):
+            st.session_state["show_live_form"] = True
+            st.rerun()
+
+        if st.session_state.get("show_live_form"):
+            st.markdown('<p class="sb-section">Update keys</p>', unsafe_allow_html=True)
+            for _pname, _pkey, _placeholder, _plink, _pmodels in _providers:
+                _is_set = bool(st.session_state[_pkey].strip())
+                _dot = '<span class="sb-dot-live"></span>' if _is_set else '<span class="sb-dot-sim"></span>'
+                st.markdown(
+                    f'<div class="sb-provider">'
+                    f'<span class="sb-provider-label">{_dot}{_pname}</span>'
+                    f'<a class="sb-provider-link" href="{_plink}" target="_blank">Get key →</a>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                st.text_input(
+                    f"{_pname} key",
+                    type="password",
+                    placeholder=_placeholder,
+                    key=_pkey,
+                    label_visibility="collapsed",
+                )
+
+        if st.button("Clear all keys — revert to Simulation", use_container_width=True, type="secondary"):
+            for _k in _KEY_FIELDS:
+                st.session_state[_k] = ""
+            st.session_state["show_live_form"] = False
+            st.toast("All API keys cleared. Running in Simulation Mode.", icon="◎")
+            st.rerun()
+
+    else:
+        # ── SIMULATION MODE ───────────────────────────────────────────────────
+        st.markdown(
+            '<div class="sb-mode-sim">◎ Simulation Mode</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption("Scores are from the RDAB benchmark — not live inference on your data.")
+
+        if not st.session_state["show_live_form"]:
+            st.markdown("")
+            if st.button("Enable Live Mode →", use_container_width=True, type="primary"):
+                st.session_state["show_live_form"] = True
+                st.rerun()
+        else:
+            st.markdown('<p class="sb-section">Enter at least one API key</p>', unsafe_allow_html=True)
+            st.caption("One key is enough. Other providers will fall back to simulation.")
+
+            for _pname, _pkey, _placeholder, _plink, _pmodels in _providers:
+                st.markdown(
+                    f'<div class="sb-provider">'
+                    f'<span class="sb-provider-label">{_pname}</span>'
+                    f'<a class="sb-provider-link" href="{_plink}" target="_blank">Get key →</a>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                st.text_input(
+                    f"{_pname} key",
+                    type="password",
+                    placeholder=_placeholder,
+                    key=_pkey,
+                    label_visibility="collapsed",
+                    help=f"{_pmodels}",
+                )
+
+            if st.button("Cancel — stay in Simulation", use_container_width=True, type="secondary"):
+                st.session_state["show_live_form"] = False
+                st.rerun()
 
     # ── Build SessionKeys from state ──────────────────────────────────────────
     session_keys = SessionKeys(
