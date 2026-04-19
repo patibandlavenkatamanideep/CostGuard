@@ -30,20 +30,20 @@ html,body,[data-testid="stAppViewContainer"]{
 
 .pp-header{background:#111827;border-radius:12px;padding:2rem;margin-bottom:1.75rem}
 .pp-header h1{font-size:1.75rem;font-weight:800;color:#fff;margin:0 0 .3rem;letter-spacing:-.4px}
-.pp-header p{font-size:.82rem;color:#9ca3af;margin:0}
+.pp-header p{font-size:.82rem;color:#d1d5db;margin:0}
 
 .pp-summary{background:#eef2ff;border:1px solid #c7d2fe;border-left:3px solid #4f46e5;border-radius:8px;padding:1rem 1.25rem;margin-bottom:1.5rem;font-size:.85rem;color:#3730a3;line-height:1.6}
 .pp-summary strong{color:#111827}
 
 .pp-section{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:1.5rem;margin-bottom:1rem}
-.pp-section h2{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;margin:0 0 .875rem;border-bottom:1px solid #f3f4f6;padding-bottom:.5rem}
+.pp-section h2{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;margin:0 0 .875rem;border-bottom:1px solid #f3f4f6;padding-bottom:.5rem}
 .pp-section p,.pp-section li{font-size:.85rem;color:#374151;line-height:1.7;margin:.35rem 0}
 .pp-section ul{padding-left:1.25rem;margin:.5rem 0}
 .pp-section a{color:#4f46e5;text-decoration:none;font-weight:600}
 .pp-section a:hover{text-decoration:underline}
 .pp-section code{background:#f3f4f6;border-radius:4px;padding:.1rem .35rem;font-size:.8rem;color:#111827}
 
-.footer{text-align:center;color:#9ca3af;font-size:.75rem;padding:1.5rem 0 .5rem;border-top:1px solid #f3f4f6;margin-top:2rem}
+.footer{text-align:center;color:#6b7280;font-size:.75rem;padding:1.5rem 0 .5rem;border-top:1px solid #f3f4f6;margin-top:2rem}
 .footer a{color:#4f46e5;text-decoration:none;font-weight:600}
 .footer a:hover{text-decoration:underline}
 </style>
