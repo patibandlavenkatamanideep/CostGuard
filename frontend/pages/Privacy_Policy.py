@@ -1,4 +1,4 @@
-"""CostGuard — Privacy Policy page."""
+"""CostGuard — Privacy Policy"""
 
 from __future__ import annotations
 
@@ -20,161 +20,154 @@ st.set_page_config(
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-html, body, [data-testid="stAppViewContainer"] {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-    background: #f8fafc; color: #0f172a;
+*,*::before,*::after{box-sizing:border-box}
+html,body,[data-testid="stAppViewContainer"]{
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif !important;
+    background:#f9fafb; color:#111827;
 }
-[data-testid="stSidebar"] { background: #ffffff; border-right: 1px solid #e2e8f0; }
-#MainMenu, footer, header { visibility: hidden; }
-.pp-hero { background: linear-gradient(135deg, #312e81 0%, #4f46e5 100%); border-radius: 16px; padding: 2rem; color: #fff; margin-bottom: 2rem; }
-.pp-hero h1 { font-size: 2rem; font-weight: 800; margin: 0 0 0.4rem; }
-.pp-hero p  { font-size: 0.9rem; color: rgba(255,255,255,.8); margin: 0; }
-.pp-section { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem 2rem; margin-bottom: 1.25rem; }
-.pp-section h2 { font-size: 1.1rem; font-weight: 700; color: #0f172a; margin: 0 0 1rem; }
-.pp-section p, .pp-section li { font-size: 0.88rem; color: #334155; line-height: 1.7; }
-.pp-section ul { padding-left: 1.25rem; margin: 0.5rem 0; }
-.highlight { background: #f0fdf4; border-left: 3px solid #22c55e; padding: 0.75rem 1rem; border-radius: 6px; margin: 0.75rem 0; font-size: 0.88rem; color: #166534; }
-.footer { text-align: center; color: #94a3b8; font-size: 0.77rem; padding: 1.5rem 0 0.5rem; border-top: 1px solid #f1f5f9; margin-top: 2rem; }
-.footer a { color: #6366f1; text-decoration: none; font-weight: 600; }
+[data-testid="stSidebar"]{background:#fff;border-right:1px solid #e5e7eb}
+#MainMenu,footer,header{visibility:hidden}
+
+.pp-header{background:#111827;border-radius:12px;padding:2rem;margin-bottom:1.75rem}
+.pp-header h1{font-size:1.75rem;font-weight:800;color:#fff;margin:0 0 .3rem;letter-spacing:-.4px}
+.pp-header p{font-size:.82rem;color:#9ca3af;margin:0}
+
+.pp-summary{background:#eef2ff;border:1px solid #c7d2fe;border-left:3px solid #4f46e5;border-radius:8px;padding:1rem 1.25rem;margin-bottom:1.5rem;font-size:.85rem;color:#3730a3;line-height:1.6}
+.pp-summary strong{color:#111827}
+
+.pp-section{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:1.5rem;margin-bottom:1rem}
+.pp-section h2{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;margin:0 0 .875rem;border-bottom:1px solid #f3f4f6;padding-bottom:.5rem}
+.pp-section p,.pp-section li{font-size:.85rem;color:#374151;line-height:1.7;margin:.35rem 0}
+.pp-section ul{padding-left:1.25rem;margin:.5rem 0}
+.pp-section a{color:#4f46e5;text-decoration:none;font-weight:600}
+.pp-section a:hover{text-decoration:underline}
+.pp-section code{background:#f3f4f6;border-radius:4px;padding:.1rem .35rem;font-size:.8rem;color:#111827}
+
+.footer{text-align:center;color:#9ca3af;font-size:.75rem;padding:1.5rem 0 .5rem;border-top:1px solid #f3f4f6;margin-top:2rem}
+.footer a{color:#4f46e5;text-decoration:none;font-weight:600}
+.footer a:hover{text-decoration:underline}
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown("""
-<div class="pp-hero">
-  <h1>🛡️ Privacy Policy</h1>
-  <p>CostGuard — LLM Cost Intelligence Platform &nbsp;·&nbsp; Effective date: April 2026</p>
+<div class="pp-header">
+  <h1>Privacy Policy</h1>
+  <p>CostGuard · Effective April 2026</p>
 </div>
 """, unsafe_allow_html=True)
 
 st.markdown("""
-<div class="pp-section">
-  <h2>Summary — what matters most</h2>
-  <div class="highlight">
-    Your uploaded data is <strong>never stored on our servers</strong>.
-    It is processed entirely in memory for the duration of a single evaluation request and discarded immediately after.
-    We do not sell, share, or retain any business data you upload.
-  </div>
-  <p>
-    CostGuard is a benchmarking tool, not a data platform.
-    Everything below describes in detail how we handle the minimal information we do collect.
-  </p>
+<div class="pp-summary">
+  <strong>Short version:</strong> Your uploaded data is never stored on our servers.
+  It is processed in memory for the duration of a single evaluation and discarded immediately after.
+  We do not sell, share, or retain any business data you upload.
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("""
+col1, col2 = st.columns(2, gap="large")
+
+with col1:
+    st.markdown("""
 <div class="pp-section">
-  <h2>1. What data we collect</h2>
-  <p><strong>Data you upload (CSV / Parquet files)</strong></p>
+  <h2>What we collect</h2>
+  <p><strong>Uploaded files (CSV / Parquet)</strong></p>
   <ul>
-    <li>Processed entirely in memory during your session.</li>
-    <li>Never written to disk, never stored in a database, never transmitted to third parties.</li>
-    <li>Discarded as soon as the evaluation completes or the session ends.</li>
+    <li>Processed in memory only — never written to disk or stored.</li>
+    <li>Discarded as soon as the evaluation completes.</li>
   </ul>
-  <p><strong>API keys you enter</strong></p>
+  <p><strong>API keys</strong></p>
   <ul>
-    <li>Stored only in your browser session state (Streamlit session, not a cookie or local storage).</li>
-    <li>Never written to server logs, environment variables, or any database.</li>
-    <li>Used only to make calls to the respective LLM provider (OpenAI, Anthropic, Google, Groq, xAI) on your behalf during that session.</li>
-    <li>Cleared automatically when your browser tab closes or you click "Clear all keys".</li>
+    <li>Held in browser session state only — not in cookies, not on the server.</li>
+    <li>Used only to call the LLM provider on your behalf for that session.</li>
+    <li>Cleared when your tab closes or you click "Clear all keys".</li>
   </ul>
   <p><strong>Evaluation metadata (logged locally)</strong></p>
   <ul>
-    <li>When an evaluation completes, CostGuard saves a summary row to a local SQLite database
-        (<code>/tmp/costguard_history.db</code> by default, configurable via <code>COSTGUARD_DB_PATH</code>).</li>
-    <li>This row contains: evaluation ID, timestamp, recommended model ID, RDAB score, cost estimate,
-        dataset fingerprint (a one-way hash of row count + column count + column names), and evaluation mode.</li>
-    <li>Column names are hashed (SHA-256 prefix) before logging. Raw column names, row values, and any cell contents are never stored.</li>
-    <li>This data lives on <em>your</em> server (or Railway volume) — it is not transmitted to Anthropic, CostGuard, or any third party.</li>
-  </ul>
-  <p><strong>Drift alerts (optional)</strong></p>
-  <ul>
-    <li>If you configure a Slack webhook URL, a brief alert is sent to your Slack workspace when a score drops more than 10% from the historical average. The alert contains model ID, scores, and evaluation ID — no user data, no uploaded file content.</li>
+    <li>A summary row is saved to a local SQLite file on <em>your</em> server.</li>
+    <li>Contains: eval ID, timestamp, recommended model, RDAB score, cost estimate, and a one-way hash of dataset shape (row/column counts + hashed column names).</li>
+    <li>No row values, no cell contents, no raw column names are ever stored.</li>
   </ul>
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("""
+    st.markdown("""
 <div class="pp-section">
-  <h2>2. What we do NOT collect</h2>
+  <h2>What we do not collect</h2>
   <ul>
     <li>No user accounts, emails, or names.</li>
-    <li>No payment information (CostGuard is free and open-source).</li>
-    <li>No IP addresses in application logs (server access logs may vary by hosting provider).</li>
-    <li>No cookies or persistent tracking of any kind.</li>
-    <li>No content from your uploaded files — only structural metadata (row/column counts, column name hashes).</li>
-    <li>No LLM responses are retained after the evaluation completes.</li>
+    <li>No payment information.</li>
+    <li>No IP addresses in application logs.</li>
+    <li>No cookies or persistent tracking.</li>
+    <li>No content from uploaded files — only structural metadata.</li>
+    <li>No LLM responses after the evaluation completes.</li>
   </ul>
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("""
+    st.markdown("""
 <div class="pp-section">
-  <h2>3. Third-party LLM providers</h2>
-  <p>
-    In Live Mode, CostGuard calls LLM provider APIs using <em>your</em> API keys.
-    Your data (specifically, a sample of up to 500 rows formatted as a text prompt) is sent to those providers.
-    Each provider's privacy policy applies to those calls:
-  </p>
-  <ul>
-    <li><strong>Anthropic</strong> — <a href="https://www.anthropic.com/privacy" target="_blank">anthropic.com/privacy</a></li>
-    <li><strong>OpenAI</strong> — <a href="https://openai.com/policies/privacy-policy" target="_blank">openai.com/policies/privacy-policy</a></li>
-    <li><strong>Google Gemini</strong> — <a href="https://policies.google.com/privacy" target="_blank">policies.google.com/privacy</a></li>
-    <li><strong>Groq</strong> — <a href="https://groq.com/privacy-policy/" target="_blank">groq.com/privacy-policy</a></li>
-    <li><strong>xAI (Grok)</strong> — <a href="https://x.ai/privacy-policy" target="_blank">x.ai/privacy-policy</a></li>
-  </ul>
-  <p>
-    CostGuard does not control how these providers handle data sent via API.
-    If your dataset contains personally identifiable information (PII), confidential business data,
-    or regulated information (HIPAA, GDPR), we strongly recommend anonymising or redacting it before uploading.
-  </p>
-</div>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<div class="pp-section">
-  <h2>4. Data retention</h2>
-  <ul>
-    <li><strong>Uploaded files:</strong> zero retention — discarded immediately after evaluation.</li>
-    <li><strong>API keys:</strong> zero retention — cleared when the session ends.</li>
-    <li><strong>Evaluation metadata:</strong> stored in local SQLite until you delete the file. Default path: <code>/tmp/costguard_history.db</code> (ephemeral on Railway; set <code>COSTGUARD_DB_PATH</code> to a persistent volume for durability).</li>
-    <li><strong>Server access logs:</strong> dependent on your hosting provider (Railway, Docker, etc.). CostGuard itself does not write access logs.</li>
-  </ul>
-</div>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<div class="pp-section">
-  <h2>5. Self-hosting</h2>
+  <h2>Self-hosting</h2>
   <p>
     CostGuard is fully open-source (MIT License).
-    If you self-host using Docker or Railway, all data stays entirely within your own infrastructure.
-    No telemetry, analytics, or usage data is sent back to the CostGuard project.
+    When self-hosted via Docker or Railway, all data stays entirely within your own infrastructure.
+    No telemetry or usage data is sent back to the CostGuard project.
   </p>
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("""
+with col2:
+    st.markdown("""
 <div class="pp-section">
-  <h2>6. Your rights</h2>
+  <h2>Third-party LLM providers</h2>
+  <p>
+    In Live Mode, a sample of your data (up to 500 rows as a text prompt) is sent to the LLM provider
+    whose API key you entered. Each provider's own privacy policy applies to those calls.
+  </p>
+  <ul>
+    <li><a href="https://www.anthropic.com/privacy" target="_blank">Anthropic</a></li>
+    <li><a href="https://openai.com/policies/privacy-policy" target="_blank">OpenAI</a></li>
+    <li><a href="https://policies.google.com/privacy" target="_blank">Google Gemini</a></li>
+    <li><a href="https://groq.com/privacy-policy/" target="_blank">Groq</a></li>
+    <li><a href="https://x.ai/privacy-policy" target="_blank">xAI (Grok)</a></li>
+  </ul>
+  <p>
+    If your dataset contains PII, confidential data, or regulated information (HIPAA, GDPR),
+    anonymise or redact it before uploading.
+  </p>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown("""
+<div class="pp-section">
+  <h2>Data retention</h2>
+  <ul>
+    <li><strong>Uploaded files:</strong> zero retention — discarded immediately.</li>
+    <li><strong>API keys:</strong> zero retention — cleared when the session ends.</li>
+    <li><strong>Evaluation metadata:</strong> stored in local SQLite at <code>COSTGUARD_DB_PATH</code> until you delete it. Default: <code>/tmp/costguard_history.db</code>.</li>
+  </ul>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown("""
+<div class="pp-section">
+  <h2>Your rights</h2>
   <p>
     Because we do not collect personal data, there is nothing to access, correct, or delete on our side.
-    Any evaluation metadata is stored on your own server and is fully under your control.
-    To delete it: remove or clear the SQLite file at <code>COSTGUARD_DB_PATH</code>.
+    All evaluation metadata is on your own server — delete the SQLite file to remove it.
   </p>
   <p>
-    If you have questions or concerns about this policy, open an issue on
+    Questions? Open an issue on
     <a href="https://github.com/patibandlavenkatamanideep/CostGuard" target="_blank">GitHub</a>.
   </p>
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("""
+    st.markdown("""
 <div class="pp-section">
-  <h2>7. Changes to this policy</h2>
+  <h2>Policy changes</h2>
   <p>
-    If this policy changes materially (e.g., if we introduce accounts or telemetry),
-    we will update this page and note the effective date at the top.
-    The current version is always available in the repository at
+    Material changes will be noted with an updated effective date at the top of this page.
+    The current version is always in the repository at
     <code>frontend/pages/Privacy_Policy.py</code>.
   </p>
 </div>

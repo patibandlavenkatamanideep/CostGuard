@@ -35,327 +35,121 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─── Design system ────────────────────────────────────────────────────────────
+# ─── Design system — 2-colour palette: #111827 (dark) + #4f46e5 (indigo) ──────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+*,*::before,*::after{box-sizing:border-box}
 
-*, *::before, *::after { box-sizing: border-box; }
+html,body,[data-testid="stAppViewContainer"]{
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif !important;
+    background:#f9fafb; color:#111827;
+}
+[data-testid="stSidebar"]{background:#fff;border-right:1px solid #e5e7eb}
+#MainMenu,footer,header{visibility:hidden}
 
-html, body, [data-testid="stAppViewContainer"] {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-    background: #f8fafc;
-    color: #0f172a;
-}
-[data-testid="stSidebar"] {
-    background: #ffffff;
-    border-right: 1px solid #e2e8f0;
-}
-#MainMenu, footer, header { visibility: hidden; }
+/* Hero */
+.hero{background:#111827;border-radius:12px;padding:2rem;margin-bottom:1.5rem;color:#fff}
+.hero-title{font-size:1.75rem;font-weight:800;letter-spacing:-.5px;margin:0 0 .4rem;color:#fff}
+.hero-sub{font-size:.88rem;color:#9ca3af;margin:0 0 1.25rem;line-height:1.6;max-width:540px}
+.hero-pills{display:flex;gap:.4rem;flex-wrap:wrap}
+.hero-pill{background:transparent;border:1px solid #374151;border-radius:999px;padding:.18rem .65rem;font-size:.7rem;font-weight:500;color:#d1d5db}
 
-/* ── Hero ── */
-.hero {
-    background: linear-gradient(135deg, #312e81 0%, #4f46e5 55%, #7c3aed 100%);
-    border-radius: 16px;
-    padding: 2.25rem 2rem 2rem;
-    margin-bottom: 1.75rem;
-    color: #fff;
-    position: relative;
-    overflow: hidden;
-}
-.hero::after {
-    content: '';
-    position: absolute;
-    top: -40px; right: -40px;
-    width: 220px; height: 220px;
-    background: rgba(255,255,255,0.05);
-    border-radius: 50%;
-}
-.hero-icon  { font-size: 2.4rem; line-height: 1; margin-bottom: 0.6rem; }
-.hero-title { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.5px; margin: 0 0 0.4rem; }
-.hero-sub   { font-size: 0.95rem; color: rgba(255,255,255,.8); margin: 0 0 1.25rem; max-width: 520px; line-height: 1.55; }
-.hero-pills { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.hero-pill  {
-    background: rgba(255,255,255,.15);
-    border: 1px solid rgba(255,255,255,.25);
-    border-radius: 999px;
-    padding: 0.22rem 0.7rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
+/* Mode badge */
+.mode-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.74rem;font-weight:600;padding:.22rem .75rem;border-radius:999px;margin-bottom:1rem}
+.mode-live{background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe}
+.mode-sim{background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb}
 
-/* ── Cards ── */
-.card {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 1.25rem 1.5rem;
-    margin-bottom: 1rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,.05);
-}
+/* Result hero */
+.result-hero{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:1.75rem;margin-bottom:1.5rem}
+.rh-eyebrow{font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#4f46e5;margin-bottom:.25rem}
+.rh-model{font-size:1.875rem;font-weight:800;color:#111827;line-height:1.15;margin-bottom:.2rem}
+.rh-meta{font-size:.74rem;color:#6b7280;font-weight:500;margin-bottom:1.25rem}
+.rh-stats{display:flex;gap:.875rem;flex-wrap:wrap;border-top:1px solid #f3f4f6;padding-top:1.25rem}
+.rh-stat{flex:1;min-width:130px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.25rem}
+.rh-stat-label{font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;margin-bottom:.3rem}
+.rh-stat-value{font-size:1.75rem;font-weight:800;color:#4f46e5;line-height:1.1;margin-bottom:.15rem}
+.rh-stat-sub{font-size:.7rem;color:#6b7280}
 
-/* ── Steps (how it works) ── */
-.steps { display: flex; gap: 1rem; margin: 0.25rem 0 0; flex-wrap: wrap; }
-.step  { flex: 1; min-width: 110px; display: flex; gap: 0.55rem; align-items: flex-start; }
-.step-num {
-    width: 22px; height: 22px; min-width: 22px;
-    background: #ede9fe; color: #6366f1;
-    border-radius: 50%; font-size: 0.68rem; font-weight: 800;
-    display: flex; align-items: center; justify-content: center;
-    margin-top: 1px;
-}
-.step-label { font-size: 0.8rem; font-weight: 600; color: #1e293b; display: block; }
-.step-desc  { font-size: 0.75rem; color: #64748b; }
+/* Scorecard */
+.scorecard{display:flex;gap:.875rem;flex-wrap:wrap;margin:0 0 1.5rem}
+.sc-item{flex:1;min-width:130px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.25rem;position:relative;overflow:hidden}
+.sc-label{font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;margin-bottom:.35rem}
+.sc-value{font-size:1.5rem;font-weight:800;color:#111827;line-height:1;margin-bottom:.15rem}
+.sc-weight{font-size:.68rem;color:#9ca3af}
+.sc-bar-bg{position:absolute;bottom:0;left:0;right:0;height:3px;background:#f3f4f6}
+.sc-bar-fill{position:absolute;bottom:0;left:0;height:3px;background:#4f46e5}
 
-/* ── Mode badge ── */
-.mode-badge {
-    display: inline-flex; align-items: center; gap: 0.4rem;
-    font-size: 0.76rem; font-weight: 600;
-    padding: 0.28rem 0.85rem; border-radius: 999px;
-    margin-bottom: 1.25rem;
-}
-.mode-live { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
-.mode-sim  { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+/* Section heading */
+.sh{display:flex;align-items:center;gap:.5rem;border-bottom:1.5px solid #e5e7eb;padding-bottom:.5rem;margin:1.75rem 0 1rem}
+.sh h3{font-size:.95rem;font-weight:700;color:#111827;margin:0}
 
-/* ── Result Hero ── */
-.result-hero {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 1.75rem 2rem 1.5rem;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,.06);
-}
-.rh-top {
-    display: flex; align-items: flex-start; gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-.rh-trophy { font-size: 2.4rem; line-height: 1; margin-top: 0.1rem; }
-.rh-eyebrow {
-    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .1em; color: #6366f1; margin-bottom: 0.3rem;
-}
-.rh-model {
-    font-size: 2rem; font-weight: 800; color: #0f172a;
-    letter-spacing: -0.5px; line-height: 1.15; margin-bottom: 0.3rem;
-}
-.rh-meta {
-    font-size: 0.76rem; font-weight: 600; color: #64748b;
-}
-.rh-stats {
-    display: flex; gap: 1rem; flex-wrap: wrap;
-    border-top: 1px solid #f1f5f9; padding-top: 1.25rem;
-}
-.rh-stat {
-    flex: 1; min-width: 140px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 1rem 1.25rem;
-}
-.rh-stat-green  { background: #f0fdf4; border-color: #bbf7d0; }
-.rh-stat-purple { background: #f5f3ff; border-color: #ddd6fe; }
-.rh-stat-label {
-    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .08em; color: #94a3b8; margin-bottom: 0.35rem;
-}
-.rh-stat-value {
-    font-size: 1.8rem; font-weight: 800; color: #0f172a;
-    line-height: 1.1; margin-bottom: 0.2rem;
-}
-.rh-stat-green  .rh-stat-value { color: #15803d; }
-.rh-stat-purple .rh-stat-value { color: #5b21b6; }
-.rh-stat-sub { font-size: 0.72rem; color: #64748b; }
+/* Steps */
+.steps{display:flex;gap:1rem;flex-wrap:wrap}
+.step{flex:1;min-width:100px;display:flex;gap:.5rem;align-items:flex-start}
+.step-num{width:20px;height:20px;min-width:20px;background:#eef2ff;color:#4f46e5;border-radius:50%;font-size:.63rem;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step-label{font-size:.8rem;font-weight:600;color:#111827;display:block}
+.step-desc{font-size:.73rem;color:#6b7280}
 
-/* ── 4-Dimension Scorecard ── */
-.scorecard {
-    display: flex; gap: 1rem; flex-wrap: wrap; margin: 0 0 1.5rem;
-}
-.sc-item {
-    flex: 1; min-width: 140px;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 1rem 1.25rem;
-    position: relative; overflow: hidden;
-}
-.sc-bar-bg {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    height: 4px; background: #f1f5f9;
-}
-.sc-bar-fill {
-    position: absolute; bottom: 0; left: 0;
-    height: 4px; background: #6366f1; border-radius: 0 2px 2px 0;
-    transition: width .4s;
-}
-.sc-label  { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #94a3b8; margin-bottom: 0.4rem; }
-.sc-value  { font-size: 1.6rem; font-weight: 800; color: #0f172a; line-height: 1; margin-bottom: 0.2rem; }
-.sc-weight { font-size: 0.7rem; color: #94a3b8; }
+/* Buttons */
+.stButton>button[kind="primary"]{background:#4f46e5 !important;color:#fff !important;border:none !important;border-radius:8px;font-weight:700;font-size:.95rem}
+.stButton>button[kind="primary"]:hover{background:#4338ca !important}
+.stButton>button[kind="secondary"]{border:1px solid #e5e7eb !important;border-radius:8px;font-size:.8rem;font-weight:600;color:#374151 !important;background:#fff !important}
+.stButton>button[kind="secondary"]:hover{border-color:#4f46e5 !important;color:#4f46e5 !important}
 
-/* ── Section heading ── */
-.sh {
-    display: flex; align-items: center; gap: 0.5rem;
-    border-bottom: 2px solid #cbd5e1;
-    padding-bottom: 0.5rem;
-    margin: 1.75rem 0 1rem;
-}
-.sh h3 { font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0; }
-.sh-icon { font-size: 1.1rem; }
+/* File uploader */
+[data-testid="stFileUploader"]{border:1.5px dashed #d1d5db;border-radius:8px}
+[data-testid="stFileUploader"]:hover{border-color:#4f46e5}
 
-/* ── Tier badge ── */
-.tier { display: inline-block; font-size: 0.67rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
-.t-premium  { background: #ede9fe; color: #5b21b6; }
-.t-balanced { background: #dbeafe; color: #1d4ed8; }
-.t-economy  { background: #dcfce7; color: #166534; }
+/* Sidebar */
+.sb-brand{font-size:1rem;font-weight:800;color:#111827;margin:0}
+.sb-tagline{font-size:.7rem;color:#9ca3af;margin:0 0 1.25rem}
+.sb-section{font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;margin:1rem 0 .35rem}
 
-/* ── Buttons ── */
-.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #6366f1, #7c3aed) !important;
-    color: #fff !important;
-    border: none !important;
-    border-radius: 8px;
-    font-weight: 700;
-    font-size: 0.95rem;
-    padding: 0.65rem 1.5rem;
-    box-shadow: 0 2px 8px rgba(99,102,241,.3);
-    transition: all .15s;
-}
-.stButton > button[kind="primary"]:hover {
-    box-shadow: 0 4px 16px rgba(99,102,241,.45) !important;
-    transform: translateY(-1px);
-}
-.stButton > button[kind="secondary"] {
-    border: 1.5px solid #e2e8f0 !important;
-    border-radius: 8px;
-    font-size: 0.8rem; font-weight: 600;
-    color: #475569 !important;
-    background: #fff !important;
-    transition: all .12s;
-}
-.stButton > button[kind="secondary"]:hover {
-    border-color: #6366f1 !important;
-    color: #6366f1 !important;
-}
+/* Empty state */
+.empty{text-align:center;padding:2.5rem 1rem}
+.empty-icon{font-size:2.5rem;margin-bottom:.75rem}
+.empty-title{font-size:1rem;font-weight:700;color:#374151;margin-bottom:.3rem}
+.empty-sub{font-size:.82rem;color:#9ca3af}
 
-/* ── File uploader ── */
-[data-testid="stFileUploader"] {
-    border: 2px dashed #c7d2fe;
-    border-radius: 10px;
-    transition: border-color .2s;
-}
-[data-testid="stFileUploader"]:hover { border-color: #6366f1; }
+/* Confidence */
+.conf-high{color:#4f46e5;font-weight:800}
+.conf-mid{color:#6b7280;font-weight:800}
+.conf-low{color:#9ca3af;font-weight:800}
 
-/* ── Sidebar ── */
-.sb-brand { font-size: 1.1rem; font-weight: 800; color: #4f46e5; margin: 0; }
-.sb-tagline { font-size: 0.71rem; color: #94a3b8; margin: 0 0 1.25rem; }
-.sb-section { font-size: 0.67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #94a3b8; margin: 1rem 0 0.4rem; }
+/* Output text */
+.output-text{font-size:.84rem;color:#374151;line-height:1.65;white-space:pre-wrap}
 
-/* ── Empty state ── */
-.empty {
-    text-align: center;
-    padding: 2.5rem 1rem;
-    color: #94a3b8;
-}
-.empty-icon  { font-size: 3rem; margin-bottom: 0.75rem; }
-.empty-title { font-size: 1rem; font-weight: 700; color: #64748b; margin-bottom: 0.35rem; }
-.empty-sub   { font-size: 0.82rem; }
+/* Case study */
+.casestudy{background:#111827;border-radius:12px;padding:2rem;margin:1.5rem 0}
+.cs-eyebrow{font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#818cf8;margin-bottom:.5rem}
+.cs-title{font-size:1.4rem;font-weight:800;color:#fff;margin-bottom:.5rem;letter-spacing:-.3px}
+.cs-body{font-size:.86rem;color:#9ca3af;line-height:1.65;margin-bottom:1.25rem}
+.cs-stats{display:flex;gap:.875rem;flex-wrap:wrap}
+.cs-stat{flex:1;min-width:110px;background:rgba(255,255,255,.04);border:1px solid #1f2937;border-radius:8px;padding:.85rem 1rem}
+.cs-stat-val{font-size:1.5rem;font-weight:800;color:#818cf8;line-height:1;margin-bottom:.15rem}
+.cs-stat-lbl{font-size:.68rem;color:#6b7280}
 
-/* ── Config block ── */
-.config-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 0.5rem;
-}
-.config-title { font-size: 0.85rem; font-weight: 700; color: #1e293b; }
+/* Spend & drift alerts — single indigo-tinted style */
+.spend-alert{background:#eef2ff;border:1px solid #c7d2fe;border-left:3px solid #4f46e5;border-radius:8px;padding:.85rem 1rem;margin-bottom:.65rem}
+.spend-alert-title{font-size:.8rem;font-weight:700;color:#3730a3;margin-bottom:.15rem}
+.spend-alert-body{font-size:.77rem;color:#4338ca;line-height:1.5}
+.spend-ok{background:#f9fafb;border:1px solid #e5e7eb;border-left:3px solid #4f46e5;border-radius:8px;padding:.85rem 1rem;margin-bottom:.65rem}
+.spend-ok-body{font-size:.8rem;color:#374151;line-height:1.5}
+.drift-alert{background:#f9fafb;border:1px solid #e5e7eb;border-left:3px solid #111827;border-radius:8px;padding:.85rem 1rem;margin-bottom:.65rem}
+.drift-alert-title{font-size:.8rem;font-weight:700;color:#111827;margin-bottom:.15rem}
+.drift-alert-body{font-size:.77rem;color:#6b7280;line-height:1.5}
 
-/* ── Footer ── */
-.footer {
-    text-align: center;
-    color: #94a3b8;
-    font-size: 0.77rem;
-    padding: 1.5rem 0 0.5rem;
-    border-top: 1px solid #f1f5f9;
-    margin-top: 2rem;
-}
-.footer a { color: #6366f1; text-decoration: none; font-weight: 600; }
-.footer a:hover { color: #4f46e5; text-decoration: underline; }
+/* Obs stats */
+.obs-stat{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:.75rem 1rem;text-align:center;flex:1;min-width:90px}
+.obs-stat-label{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af}
+.obs-stat-value{font-size:1.25rem;font-weight:800;color:#111827}
+.obs-row{display:flex;gap:.75rem;margin:.75rem 0 1.25rem;flex-wrap:wrap}
 
-/* ── Confidence badge ── */
-.conf-high   { color: #15803d; font-weight: 800; }
-.conf-mid    { color: #b45309; font-weight: 800; }
-.conf-low    { color: #dc2626; font-weight: 800; }
-
-/* ── Model output card ── */
-.output-card {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 1.25rem 1.5rem;
-    margin-bottom: 1rem;
-}
-.output-model-name { font-size: 0.9rem; font-weight: 700; color: #1e293b; margin-bottom: 0.25rem; }
-.output-meta       { font-size: 0.72rem; color: #64748b; margin-bottom: 0.75rem; }
-.output-text       { font-size: 0.85rem; color: #334155; line-height: 1.6; white-space: pre-wrap; }
-
-/* ── Case study ── */
-.casestudy {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-    border-radius: 16px;
-    padding: 2rem;
-    color: #f8fafc;
-    margin: 1.5rem 0;
-}
-.cs-eyebrow { font-size: 0.67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: #818cf8; margin-bottom: 0.5rem; }
-.cs-title   { font-size: 1.5rem; font-weight: 800; color: #fff; margin-bottom: 0.5rem; letter-spacing: -0.3px; }
-.cs-body    { font-size: 0.88rem; color: #cbd5e1; line-height: 1.65; margin-bottom: 1.25rem; }
-.cs-stats   { display: flex; gap: 1rem; flex-wrap: wrap; }
-.cs-stat    { flex: 1; min-width: 120px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 0.9rem 1rem; }
-.cs-stat-val { font-size: 1.6rem; font-weight: 800; color: #a5b4fc; line-height: 1; margin-bottom: 0.2rem; }
-.cs-stat-lbl { font-size: 0.7rem; color: #94a3b8; }
-
-/* ── Spend monitor ── */
-.spend-alert {
-    background: #fff7ed;
-    border: 1px solid #fed7aa;
-    border-left: 4px solid #f97316;
-    border-radius: 10px;
-    padding: 0.85rem 1.1rem;
-    margin-bottom: 0.75rem;
-}
-.spend-alert-title { font-size: 0.82rem; font-weight: 700; color: #9a3412; margin-bottom: 0.2rem; }
-.spend-alert-body  { font-size: 0.78rem; color: #7c2d12; line-height: 1.5; }
-.spend-ok {
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
-    border-left: 4px solid #22c55e;
-    border-radius: 10px;
-    padding: 0.85rem 1.1rem;
-    margin-bottom: 0.75rem;
-}
-.spend-ok-body { font-size: 0.82rem; color: #166534; line-height: 1.5; }
-
-/* ── Observability ── */
-.drift-alert {
-    background: #fff7ed;
-    border: 1px solid #fed7aa;
-    border-left: 4px solid #f97316;
-    border-radius: 10px;
-    padding: 0.85rem 1.1rem;
-    margin-bottom: 0.75rem;
-}
-.drift-alert-title { font-size: 0.82rem; font-weight: 700; color: #9a3412; margin-bottom: 0.2rem; }
-.drift-alert-body  { font-size: 0.78rem; color: #7c2d12; line-height: 1.5; }
-.obs-stat {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 0.8rem 1rem;
-    text-align: center;
-    flex: 1;
-    min-width: 100px;
-}
-.obs-stat-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #94a3b8; }
-.obs-stat-value { font-size: 1.3rem; font-weight: 800; color: #0f172a; }
-.obs-row { display: flex; gap: 0.8rem; margin: 0.8rem 0 1.25rem; flex-wrap: wrap; }
+/* Footer */
+.footer{text-align:center;color:#9ca3af;font-size:.75rem;padding:1.5rem 0 .5rem;border-top:1px solid #f3f4f6;margin-top:2rem}
+.footer a{color:#4f46e5;text-decoration:none;font-weight:600}
+.footer a:hover{text-decoration:underline}
 </style>
 """, unsafe_allow_html=True)
 
@@ -427,8 +221,8 @@ def _make_sample_products() -> bytes:
 
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown('<p class="sb-brand">🛡️ CostGuard</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sb-tagline">LLM Cost Intelligence Platform</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sb-brand">CostGuard</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sb-tagline">LLM Cost Intelligence</p>', unsafe_allow_html=True)
 
     st.markdown('<p class="sb-section">Task Description</p>', unsafe_allow_html=True)
     task_description = st.text_area(
@@ -487,19 +281,16 @@ with st.sidebar:
 # ─── Hero ─────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="hero">
-  <div class="hero-icon">🛡️</div>
-  <h1 class="hero-title">CostGuard</h1>
+  <div class="hero-title">CostGuard</div>
   <p class="hero-sub">
-    Upload any dataset and instantly benchmark 12 models on your actual data.
-    Get the best model recommendation with exact per-run cost estimates — no guesswork.
+    Benchmark 12 LLMs on your actual data. Get a model recommendation with exact cost estimates — no guesswork, no sign-up.
   </p>
   <div class="hero-pills">
-    <span class="hero-pill">12 Benchmarked Models</span>
+    <span class="hero-pill">12 Models</span>
     <span class="hero-pill">4-Dimensional RDAB Scoring</span>
-    <span class="hero-pill">No Sign-up</span>
-    <span class="hero-pill">Simulation Mode — No API Keys Needed</span>
-    <span class="hero-pill">🔒 Data processed in memory — never stored</span>
-    <span class="hero-pill">🐳 Self-host with Docker in one command</span>
+    <span class="hero-pill">Simulation — No API Keys Needed</span>
+    <span class="hero-pill">Data never stored</span>
+    <span class="hero-pill">Self-host with Docker</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -631,26 +422,21 @@ if result := st.session_state.get("result"):
     st.markdown(_mode_pill, unsafe_allow_html=True)
     st.markdown(f"""
 <div class="result-hero">
-  <div class="rh-top">
-    <div class="rh-trophy">🏆</div>
-    <div>
-      <div class="rh-eyebrow">Best Model for Your Data</div>
-      <div class="rh-model">{rec['display_name']}</div>
-      <div class="rh-meta">{rec['provider'].upper()} &nbsp;·&nbsp; {rec['tier'].upper()} TIER &nbsp;·&nbsp; {rec['latency_ms']:.0f} ms avg latency</div>
-    </div>
-  </div>
+  <div class="rh-eyebrow">Recommended Model</div>
+  <div class="rh-model">{rec['display_name']}</div>
+  <div class="rh-meta">{rec['provider'].upper()} &nbsp;·&nbsp; {rec['tier'].upper()} TIER &nbsp;·&nbsp; {rec['latency_ms']:.0f} ms avg latency</div>
   <div class="rh-stats">
-    <div class="rh-stat rh-stat-purple">
+    <div class="rh-stat">
       <div class="rh-stat-label">RDAB Score</div>
       <div class="rh-stat-value">{sc['rdab_score']:.0%}</div>
-      <div class="rh-stat-sub">Composite benchmark (12 models)</div>
+      <div class="rh-stat-sub">Composite benchmark — 12 models</div>
     </div>
     <div class="rh-stat">
-      <div class="rh-stat-label">Estimated Cost</div>
+      <div class="rh-stat-label">Cost per Run</div>
       <div class="rh-stat-value">{_fmt_cost(rec['estimated_total_cost_usd'])}</div>
-      <div class="rh-stat-sub">per run · {rec['estimated_tokens_input']:,} input tokens</div>
+      <div class="rh-stat-sub">{rec['estimated_tokens_input']:,} input tokens</div>
     </div>
-    <div class="rh-stat rh-stat-green">
+    <div class="rh-stat">
       <div class="rh-stat-label">Potential Savings</div>
       <div class="rh-stat-value">{_savings_pct:.0f}%</div>
       <div class="rh-stat-sub">{_savings_label}</div>
@@ -665,10 +451,9 @@ if result := st.session_state.get("result"):
 """, unsafe_allow_html=True)
 
     # ── 4-Dimension Scorecard ────────────────────────────────────────────────
-    _sim_note = " · Simulated" if sc.get("simulated") else " · Live benchmark"
+    _sim_note = " · Simulated" if sc.get("simulated") else " · Live"
     st.markdown(
-        f'<div class="sh"><span class="sh-icon">🎯</span>'
-        f'<h3>4-Dimension RDAB Scorecard{_sim_note}</h3></div>',
+        f'<div class="sh"><h3>RDAB Scorecard{_sim_note}</h3></div>',
         unsafe_allow_html=True,
     )
     _dims = [
@@ -711,7 +496,7 @@ if result := st.session_state.get("result"):
         st.caption(f"Format: **{stats['file_format']}**  ·  Columns: {', '.join(stats['column_names'][:12])}")
 
     # ── Model comparison charts ──────────────────────────────────────────────
-    st.markdown('<div class="sh"><span class="sh-icon">📈</span><h3>All Models — Comparison</h3></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sh"><h3>All Models — Comparison</h3></div>', unsafe_allow_html=True)
 
     results_raw = result["results"]
     for r in results_raw:
@@ -724,9 +509,9 @@ if result := st.session_state.get("result"):
         r["simulated"]    = sc_r.get("simulated", True)
     df_models = pd.DataFrame(results_raw)
 
-    TIER_COLORS = {"premium": "#6366f1", "balanced": "#3b82f6", "economy": "#10b981"}
-    CHART_BG    = "#f8fafc"
-    GRID_COLOR  = "#e2e8f0"
+    TIER_COLORS = {"premium": "#4f46e5", "balanced": "#818cf8", "economy": "#c7d2fe"}
+    CHART_BG    = "#ffffff"
+    GRID_COLOR  = "#f3f4f6"
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "Score vs Cost",
@@ -763,7 +548,7 @@ if result := st.session_state.get("result"):
         )
         fig.update_traces(
             textposition="top center",
-            textfont=dict(size=12, color="#1e293b", family="Inter"),
+            textfont=dict(size=12, color="#111827", family="Inter"),
         )
         # Explicit star marker so the recommended model is always visible
         # even if the annotation arrow lands slightly off due to floating-point.
@@ -783,25 +568,25 @@ if result := st.session_state.get("result"):
             type="log",
             title="Cost per Run (USD) — log scale",
             gridcolor=GRID_COLOR, zeroline=False,
-            title_font=dict(size=12, color="#1e293b"),
-            tickfont=dict(size=11, color="#475569"),
+            title_font=dict(size=12, color="#111827"),
+            tickfont=dict(size=11, color="#6b7280"),
             tickvals=[1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1],
             ticktext=["$0.000001", "$0.00001", "$0.0001", "$0.001", "$0.01", "$0.10"],
         )
         fig.update_layout(
             height=460,
             plot_bgcolor=CHART_BG, paper_bgcolor=CHART_BG,
-            font=dict(family="Inter", color="#1e293b"),
-            title=dict(font=dict(size=13, color="#1e293b")),
+            font=dict(family="Inter", color="#111827"),
+            title=dict(font=dict(size=13, color="#111827")),
             yaxis=dict(
                 gridcolor=GRID_COLOR, zeroline=False,
-                title_font=dict(size=12, color="#1e293b"),
-                tickfont=dict(size=11, color="#475569"),
+                title_font=dict(size=12, color="#111827"),
+                tickfont=dict(size=11, color="#6b7280"),
                 tickformat=".0%",
             ),
             legend=dict(
                 orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
-                font=dict(size=11, color="#1e293b"),
+                font=dict(size=11, color="#111827"),
             ),
             margin=dict(l=0, r=0, t=50, b=0),
         )
@@ -810,7 +595,7 @@ if result := st.session_state.get("result"):
     with tab2:
         top5   = df_models.nlargest(5, "rdab_score")
         cats   = ["Correctness", "Code Quality", "Efficiency", "Stat Validity"]
-        colors = ["#6366f1", "#3b82f6", "#10b981", "#f59e0b", "#ef4444"]
+        colors = ["#4f46e5", "#6366f1", "#818cf8", "#a5b4fc", "#c7d2fe"]
         radar  = go.Figure()
         for i, (_, row) in enumerate(top5.iterrows()):
             vals = [row["correctness"], row["code_quality"], row["efficiency"], row["stat_validity"]]
@@ -828,22 +613,22 @@ if result := st.session_state.get("result"):
             polar=dict(
                 radialaxis=dict(
                     visible=True, range=[0, 1],
-                    tickfont=dict(size=10, color="#475569"),
+                    tickfont=dict(size=10, color="#6b7280"),
                     gridcolor=GRID_COLOR,
                     tickformat=".0%",
                 ),
                 angularaxis=dict(
-                    tickfont=dict(size=12, color="#1e293b"),
+                    tickfont=dict(size=12, color="#111827"),
                 ),
                 bgcolor=CHART_BG,
             ),
-            title=dict(text="4-Dimensional Scorecard — Top 5 Models", font=dict(size=13, color="#1e293b")),
+            title=dict(text="4-Dimensional Scorecard — Top 5 Models", font=dict(size=13, color="#111827")),
             height=480,
             paper_bgcolor=CHART_BG,
-            font=dict(family="Inter", color="#1e293b"),
+            font=dict(family="Inter", color="#111827"),
             legend=dict(
                 orientation="h", yanchor="top", y=-0.05, xanchor="center", x=0.5,
-                font=dict(size=11, color="#1e293b"),
+                font=dict(size=11, color="#111827"),
             ),
             margin=dict(l=10, r=10, t=50, b=10),
         )
@@ -868,22 +653,22 @@ if result := st.session_state.get("result"):
         fig2.update_traces(
             texttemplate="%{text:.0f} ms",
             textposition="outside",
-            textfont=dict(size=11, color="#1e293b"),
+            textfont=dict(size=11, color="#111827"),
         )
         fig2.update_layout(
             height=420,
             plot_bgcolor=CHART_BG, paper_bgcolor=CHART_BG,
-            font=dict(family="Inter", color="#1e293b"),
-            title=dict(font=dict(size=13, color="#1e293b")),
+            font=dict(family="Inter", color="#111827"),
+            title=dict(font=dict(size=13, color="#111827")),
             xaxis=dict(
                 tickangle=-35, gridcolor=GRID_COLOR,
-                tickfont=dict(size=11, color="#1e293b"),
-                title_font=dict(size=12, color="#1e293b"),
+                tickfont=dict(size=11, color="#111827"),
+                title_font=dict(size=12, color="#111827"),
             ),
             yaxis=dict(
                 gridcolor=GRID_COLOR,
-                tickfont=dict(size=11, color="#475569"),
-                title_font=dict(size=12, color="#1e293b"),
+                tickfont=dict(size=11, color="#6b7280"),
+                title_font=dict(size=12, color="#111827"),
             ),
             showlegend=False,
             margin=dict(l=0, r=0, t=50, b=100),
@@ -939,8 +724,7 @@ if result := st.session_state.get("result"):
 """, unsafe_allow_html=True)
         else:
             st.markdown(
-                f'<div class="sh"><span class="sh-icon">💬</span>'
-                f'<h3>What each model said — {len(_live_results)} live model{"s" if len(_live_results) != 1 else ""}</h3></div>',
+                f'<div class="sh"><h3>What each model said — {len(_live_results)} live model{"s" if len(_live_results) != 1 else ""}</h3></div>',
                 unsafe_allow_html=True,
             )
             if _questions:
@@ -972,7 +756,7 @@ if result := st.session_state.get("result"):
 
     # ── Recommended config ───────────────────────────────────────────────────
     st.markdown(
-        '<div class="sh"><span class="sh-icon">⚙️</span><h3>Recommended Config — Ready to Copy</h3></div>',
+        '<div class="sh"><h3>Recommended Config</h3></div>',
         unsafe_allow_html=True,
     )
     st.caption(f"Drop this into your project to start using **{rec['display_name']}** immediately.")
@@ -1029,7 +813,7 @@ st.markdown("""
 # ─── History & Alerts ────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown(
-    '<div class="sh"><span class="sh-icon">📜</span>'
+    '<div class="sh">'
     '<h3>History &amp; Alerts</h3></div>',
     unsafe_allow_html=True,
 )
