@@ -46,7 +46,13 @@ html,body,[data-testid="stAppViewContainer"]{
     background:#f9fafb; color:#111827;
 }
 [data-testid="stSidebar"]{background:#fff;border-right:1px solid #e5e7eb}
-#MainMenu,footer,header{visibility:hidden}
+/* Hide Streamlit chrome but NOT the whole header — that kills the sidebar toggle */
+#MainMenu,footer{visibility:hidden}
+[data-testid="stHeader"]{background:transparent !important;border:none !important}
+[data-testid="stDecoration"]{display:none !important}
+[data-testid="stDeployButton"]{visibility:hidden !important}
+[data-testid="stStatusWidget"]{visibility:hidden !important}
+[data-testid="stToolbarActionButton"]{visibility:hidden !important}
 
 /* Hero */
 .hero{background:#111827;border-radius:12px;padding:2rem;margin-bottom:1.5rem;color:#fff}
@@ -179,33 +185,17 @@ html,body,[data-testid="stAppViewContainer"]{
     color:#4f46e5 !important;
 }
 
-/* ── Sidebar collapse / reopen button — must stay visible even when header is hidden ── */
-/* header{visibility:hidden} hides the whole header incl. this button, so we restore it */
-[data-testid="collapsedControl"] {
-    visibility:visible !important;
-    opacity:1 !important;
-    pointer-events:auto !important;
+/* ── Sidebar toggle buttons — style both open and collapsed states ───────── */
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapsedControl"] {
     background:#4f46e5 !important;
     border-radius:0 8px 8px 0 !important;
-    min-width:28px !important;
-    min-height:40px !important;
-    display:flex !important;
-    align-items:center !important;
-    justify-content:center !important;
-    position:fixed !important;
-    left:0 !important;
-    top:50vh !important;
-    z-index:99999 !important;
-    box-shadow:2px 0 8px rgba(79,70,229,.35) !important;
-    cursor:pointer !important;
-    border:none !important;
+    opacity:1 !important;
 }
-[data-testid="collapsedControl"] svg,
-[data-testid="collapsedControl"] svg path {
-    visibility:visible !important;
+[data-testid="collapsedControl"] svg path,
+[data-testid="stSidebarCollapsedControl"] svg path {
     fill:#ffffff !important;
     stroke:#ffffff !important;
-    color:#ffffff !important;
 }
 </style>
 """, unsafe_allow_html=True)
