@@ -185,10 +185,10 @@ html,body,[data-testid="stAppViewContainer"]{
     color:#4f46e5 !important;
 }
 
-/* ── Sidebar toggle buttons — style both open and collapsed states ───────── */
+/* ── Sidebar toggle buttons — dark navy so always findable ──────────────── */
 [data-testid="collapsedControl"],
 [data-testid="stSidebarCollapsedControl"] {
-    background:#4f46e5 !important;
+    background:#111827 !important;
     border-radius:0 8px 8px 0 !important;
     opacity:1 !important;
 }
@@ -196,6 +196,38 @@ html,body,[data-testid="stAppViewContainer"]{
 [data-testid="stSidebarCollapsedControl"] svg path {
     fill:#ffffff !important;
     stroke:#ffffff !important;
+}
+/* Also style the close-sidebar button inside the open sidebar */
+[data-testid="stSidebar"] button {
+    color:#111827 !important;
+}
+[data-testid="stSidebar"] button svg path {
+    fill:#111827 !important;
+}
+
+/* ── Tab labels — "All Models" and "History & Alerts" sections ───────────── */
+/* Inactive tab text */
+button[data-baseweb="tab"] p,
+button[data-baseweb="tab"] span,
+button[data-baseweb="tab"] {
+    color:#111827 !important;
+    font-weight:600 !important;
+    opacity:1 !important;
+}
+/* Active tab */
+button[data-baseweb="tab"][aria-selected="true"] p,
+button[data-baseweb="tab"][aria-selected="true"] span,
+button[data-baseweb="tab"][aria-selected="true"] {
+    color:#4f46e5 !important;
+    font-weight:700 !important;
+}
+/* Active tab underline indicator */
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+    background:#4f46e5 !important;
+}
+/* Tab border bottom strip */
+[data-testid="stTabs"] [data-baseweb="tab-border"] {
+    background:#e5e7eb !important;
 }
 </style>
 """, unsafe_allow_html=True)
