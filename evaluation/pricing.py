@@ -146,18 +146,6 @@ MODELS: dict[str, ModelPricing] = {
     ),
 
     # ── Google Gemini ─────────────────────────────────────────────────────────
-    "gemini-2.5-pro": ModelPricing(
-        model_id="gemini-2.5-pro",
-        rdab_alias="gemini-pro",
-        provider="google",
-        display_name="Gemini 2.5 Pro",
-        tier="premium",
-        input_per_1k=0.00125,     # $1.25 / 1M
-        output_per_1k=0.005,      # $5.00 / 1M
-        context_window=2_000_000,
-        strengths=["2M context window", "Competitive pricing", "Strong reasoning"],
-        limitations=["Requires Google API key"],
-    ),
     "gemini-2.5-flash": ModelPricing(
         model_id="gemini-2.5-flash",
         rdab_alias="gemini-flash",
@@ -184,44 +172,7 @@ MODELS: dict[str, ModelPricing] = {
         strengths=["Ultra-fast (Groq)", "Outperforms on modeling tasks (RDAB)", "Open-source"],
         limitations=["Groq rate limits", "Variable on complex reasoning"],
     ),
-    "llama-3.1-70b-versatile": ModelPricing(
-        model_id="llama-3.1-70b-versatile",
-        rdab_alias="llama-70b",
-        provider="groq",
-        display_name="Llama 3.1 70B (Groq)",
-        tier="balanced",
-        input_per_1k=0.00059,
-        output_per_1k=0.00079,
-        context_window=128_000,
-        strengths=["Fast", "Open-source", "Cheap"],
-        limitations=["Older than Llama 3.3"],
-    ),
-    "mixtral-8x7b-32768": ModelPricing(
-        model_id="mixtral-8x7b-32768",
-        rdab_alias="mixtral",
-        provider="groq",
-        display_name="Mixtral 8x7B (Groq)",
-        tier="economy",
-        input_per_1k=0.00024,     # $0.24 / 1M
-        output_per_1k=0.00024,
-        context_window=32_768,
-        strengths=["Second cheapest option", "MoE architecture"],
-        limitations=["Smaller context", "Older model"],
-    ),
-
     # ── xAI Grok ─────────────────────────────────────────────────────────────
-    "grok-3": ModelPricing(
-        model_id="grok-3",
-        rdab_alias="grok",
-        provider="xai",
-        display_name="Grok-3",
-        tier="premium",
-        input_per_1k=0.003,       # $3.00 / 1M
-        output_per_1k=0.015,      # $15.00 / 1M
-        context_window=131_072,
-        strengths=["Strong reasoning", "Real-time knowledge"],
-        limitations=["Not in RDAB benchmark set", "xAI API only"],
-    ),
     "grok-3-mini": ModelPricing(
         model_id="grok-3-mini",
         rdab_alias="grok-mini",

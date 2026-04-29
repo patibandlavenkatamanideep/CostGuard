@@ -16,7 +16,7 @@ CostGuard is a self-hostable reliability and cost-optimization layer for LLM-pow
 
 - **Real-time response validation** — every LLM response is scored for statistical validity before being returned to your application
 - **Auto-reject + automatic fallback** — if a response scores below your quality threshold, CostGuard rejects it and retries with the next best model automatically
-- **Exact cost tracking** — per-call token accounting at $0.000001 precision across 16 models and 5 providers
+- **Exact cost tracking** — per-call token accounting at $0.000001 precision across 12 models and 5 providers
 - **Comprehensive alerting** — validity drops, cost spikes, high failure rates, circuit breaker events, and consecutive low-quality responses
 - **Model benchmarking** — powered by [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) across 1,180+ evaluation runs, 39 tasks, 12 models
 

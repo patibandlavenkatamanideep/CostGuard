@@ -97,8 +97,8 @@ class TestDataLoader:
 
 class TestPricing:
     def test_all_models_present(self):
-        # 16 models total: 12 RDAB-benchmarked + 4 non-RDAB (gemini-2.5-pro, llama-3.1, mixtral, grok-3)
-        assert len(MODELS) >= 16
+        # Exactly 12 models — mirrors the RDAB benchmark set
+        assert len(MODELS) == 12
 
     def test_rdab_default_model_present(self):
         """claude-sonnet-4-6 is RDAB's default model."""
