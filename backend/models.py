@@ -159,6 +159,8 @@ class HealthResponse(BaseModel):
     available_providers: list[str]
     environment: str
     rdab_available: bool = Field(default=False, description="Whether RDAB package is importable")
+    db_ok: bool = Field(default=False, description="Whether the observability DB is reachable")
+    circuit_breakers: dict = Field(default_factory=dict, description="Circuit breaker states per provider")
 
 
 class ErrorResponse(BaseModel):

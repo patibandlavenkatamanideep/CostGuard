@@ -1,6 +1,6 @@
 # CostGuard
 
-> **Stop guessing which LLM to use. CostGuard benchmarks 12 models against your actual data — Simulation mode in under 15 seconds, Live mode in 1–3 minutes — and tells you exactly what it will cost.**
+> **Production-grade LLM reliability and cost optimization platform. Route every agent call through CostGuard — it evaluates validity, tracks cost, fires alerts, and auto-rejects low-quality responses before they reach your users.**
 
 [![CI/CD](https://github.com/patibandlavenkatamanideep/CostGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/patibandlavenkatamanideep/CostGuard/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
@@ -10,184 +10,146 @@
 
 ---
 
+## What Is CostGuard?
+
+CostGuard is a self-hostable reliability and cost-optimization layer for LLM-powered agents and applications. It sits between your code and the LLM provider, giving you:
+
+- **Real-time response validation** — every LLM response is scored for statistical validity before being returned to your application
+- **Auto-reject + automatic fallback** — if a response scores below your quality threshold, CostGuard rejects it and retries with the next best model automatically
+- **Exact cost tracking** — per-call token accounting at $0.000001 precision across 15 models and 5 providers
+- **Comprehensive alerting** — validity drops, cost spikes, high failure rates, circuit breaker events, and consecutive low-quality responses
+- **Model benchmarking** — powered by [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) across 1,180+ evaluation runs, 39 tasks, 12 models
+
+**Who this is for:** teams running LangGraph, CrewAI, or any custom LLM agent in production who need reliability guarantees and cost control without building their own evaluation infrastructure.
+
 ---
 
-## Try It Now
+## Live Demo
 
 **[costguard-production-3afa.up.railway.app](https://costguard-production-3afa.up.railway.app)**
 
-No account. No API keys. No setup. Upload a CSV or Parquet file and get your answer in **under 15 seconds** (Simulation mode) or **1–3 minutes** (Live mode with your own API keys).
-
-> 🔒 **Privacy:** your file is processed entirely in memory and never written to disk or stored.
-
-> Most teams are overpaying for LLMs by 10–20× — using GPT-4o for tasks a $0.0001/1K model handles just as well. CostGuard shows you exactly which model fits your data, what it will cost per run, and how much you save versus the alternatives.
-
-**Prefer to self-host?** Run it locally in one command — no Railway account needed:
-
-```bash
-git clone https://github.com/patibandlavenkatamanideep/CostGuard.git && cd CostGuard
-cp .env.example .env  # add API keys optionally
-docker compose up
-# Dashboard → http://localhost:8501 · API docs → http://localhost:8000/docs
-```
-
-**How it works in 4 steps:**
-
-1. **Upload** — drop any CSV or Parquet file (or use a built-in sample dataset)
-2. **Benchmark** — CostGuard evaluates 10 benchmarked LLMs against your actual data using [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)
-3. **Compare** — see RDAB score, cost per run, latency, and a 4-dimension scorecard for every model
-4. **Deploy** — copy the one-click config and paste it straight into your project
-
-The live result screen shows three numbers front and center: **Best Model**, **Estimated Cost per run**, and **Potential Savings** vs the most expensive alternative. Everything else is detail.
+No account. No setup. Upload a CSV or Parquet file and get a model recommendation in under 15 seconds (Simulation Mode) or 1–3 minutes (Live Mode with your API keys).
 
 ---
 
-## What is CostGuard?
+## Self-Host in One Command
 
-Most teams pick an LLM and stick with it — often overpaying by 10–20× for tasks a cheaper model handles just as well. CostGuard fixes that.
+```bash
+git clone https://github.com/patibandlavenkatamanideep/CostGuard.git && cd CostGuard
+cp .env.example .env   # add at least one API key for proxy mode
+docker compose up
+```
 
-Upload any CSV or Parquet file. CostGuard runs your data through **[RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)** — a 4-dimensional evaluation harness — across 10 benchmarked LLMs, then surfaces:
+- Dashboard → **http://localhost:8501**
+- API + Proxy → **http://localhost:8000**
+- API Docs → **http://localhost:8000/docs**
+- Prometheus Metrics → **http://localhost:8000/metrics**
 
-- **Best model recommendation** ranked by RDAB score + exact cost
-- **Per-run cost estimate** down to $0.000001 precision
-- **One-click copyable config** — paste directly into your project
-- **Radar chart** comparing Correctness · Code Quality · Efficiency · Stat Validity
-
-No account. Your data is processed in memory and never stored. Simulation results in under 15 seconds; Live mode takes 1–3 minutes.
+With Grafana monitoring:
+```bash
+docker compose --profile monitoring up
+# Grafana → http://localhost:3000 (admin / costguard)
+```
 
 ---
 
 ## Architecture
 
-```mermaid
-graph TB
-    User([User Browser]) -->|Upload CSV/Parquet| ST[Streamlit Dashboard<br/>:8501]
-    ST -->|POST /evaluate| API[FastAPI Backend<br/>:8000]
-
-    API --> DL[Data Loader<br/>CSV · Parquet · Validation]
-    DL --> QG[Question Generator<br/>Auto-generates from schema]
-    QG --> EE[CostGuard Engine<br/>Parallel model evaluation]
-
-    EE -->|Dynamic TaskSchema| RDAB[RealDataAgentBench<br/>harness.Agent + CompositeScorer]
-
-    RDAB --> OAI[OpenAI<br/>GPT-5 · 4.1 · 4o]
-    RDAB --> ANT[Anthropic<br/>Claude Sonnet · Haiku]
-    RDAB --> GGL[Google<br/>Gemini 2.5 Pro · Flash]
-    RDAB --> GRQ[Groq<br/>Llama 3.3 · Mixtral]
-    RDAB --> XAI[xAI<br/>Grok-3 · Grok-3 mini]
-
-    RDAB --> SC[RDAB CompositeScorer<br/>Correctness · Code · Efficiency · StatVal]
-    SC --> RK[Ranker<br/>75% RDAB + 25% sqrt-normalised Cost]
-    RK -->|EvalResponse| API
-    API -->|JSON| ST
-    ST -->|Radar + Scatter + Table + Config| User
-
-    style ST fill:#667eea,color:#fff
-    style API fill:#764ba2,color:#fff
-    style RDAB fill:#11998e,color:#fff
-    style EE fill:#059669,color:#fff
+```
+Your Agent / LangGraph / CrewAI
+        │
+        ▼
+┌───────────────────────────────────────────┐
+│         CostGuard Proxy Layer             │
+│                                           │
+│  POST /proxy   ← real-time intercept      │
+│  POST /evaluate ← batch benchmarking      │
+│  GET  /metrics  ← Prometheus scrape       │
+│  GET  /health   ← deep health check       │
+│                                           │
+│  Stack: RequestID → RateLimit →           │
+│         Security → Prometheus             │
+└────────────┬─────────────┬────────────────┘
+             │             │
+      ┌──────▼──────┐ ┌────▼──────────────┐
+      │ RDAB        │ │ Alerting Engine    │
+      │ Evaluator   │ │ Validity | Cost    │
+      │ (fast mode) │ │ FailureRate | CB   │
+      └──────┬──────┘ └────────────────────┘
+             │
+      ┌──────▼──────────────────────────────┐
+      │  Circuit Breaker (per provider)     │
+      │  anthropic | openai | groq | google │
+      └──────┬──────────────────────────────┘
+             │
+      ┌──────▼──────────────────────────────┐
+      │  LLM Providers (with backoff)       │
+      └─────────────────────────────────────┘
 ```
 
 ---
 
-## Supported Models
+## The Proxy — Drop-In LLM Guard
 
-CostGuard supports 15 models for Live Mode evaluation. The 12 models marked with ✓ have full RDAB benchmark data (276 runs · 23 tasks) and power Simulation Mode results.
+Replace your direct LLM call with a POST to `/proxy`. Every response is evaluated before it reaches your code.
 
-| Model | Provider | Tier | Input $/1K | RDAB |
-|-------|----------|------|-----------|:----:|
-| Claude Sonnet 4.6 | Anthropic | Premium | $0.003 | ✓ Default model |
-| Claude Opus 4.6 | Anthropic | Premium | $0.015 | ✓ Highest capability |
-| Claude Haiku 4.5 | Anthropic | Economy | $0.00025 | ✓ Token-inefficient vs peers |
-| **GPT-4.1** | OpenAI | Premium | **$0.002** | ✓ **Cost-performance leader** |
-| GPT-4.1 mini | OpenAI | Balanced | $0.0004 | Live Mode only |
-| GPT-4.1 nano | OpenAI | Economy | $0.0001 | Live Mode only |
-| GPT-4o | OpenAI | Premium | $0.0025 | ✓ Proven reliability |
-| GPT-4o mini | OpenAI | Balanced | $0.00015 | ✓ Strong cost-efficiency |
-| GPT-5 | OpenAI | Premium | $0.015 | ✓ Max capability, 16× GPT-4.1 cost |
-| **Gemini 2.5 Flash** | Google | Economy | **$0.000075** | ✓ **Cheapest overall** |
-| Gemini 2.5 Pro | Google | Premium | $0.00125 | Live Mode only |
-| Llama 3.3 70B (Groq) | Groq | Balanced | $0.00059 | ✓ Best on modeling tasks |
-| Mixtral 8x7B (Groq) | Groq | Economy | $0.00024 | Live Mode only |
-| Grok-3 | xAI | Premium | $0.003 | Live Mode only |
-| Grok-3 mini | xAI | Balanced | $0.0003 | ✓ sklearn blind spot (RDAB) |
+### Before (no reliability layer)
+```python
+import anthropic
+client = anthropic.Anthropic(api_key="sk-ant-...")
+response = client.messages.create(model="claude-sonnet-4-6", ...)
+# No validity check. No cost tracking. No fallback.
+```
+
+### After (with CostGuard)
+```python
+import httpx
+
+response = httpx.post("http://costguard:8000/proxy", json={
+    "model_id": "claude-sonnet-4-6",
+    "prompt": "Analyze Q3 revenue trends and compute 95% confidence intervals.",
+    "reject_threshold": 0.30,           # reject if validity < 30%
+    "fallback_models": ["gpt-4.1", "gemini-2.5-flash"],  # try these on rejection
+}).json()
+
+print(response["content"])           # the LLM's response
+print(response["accepted"])          # True / False
+print(response["validity_score"])    # RDAB scorecard
+print(response["cost_usd"])          # exact cost for this call
+print(response["fallback_used"])     # True if primary was rejected
+```
+
+### Proxy Response Schema
+```json
+{
+  "call_id": "a3f9e1b2",
+  "model_id": "claude-sonnet-4-6",
+  "provider": "anthropic",
+  "content": "The 95% confidence interval for Q3 revenue is...",
+  "accepted": true,
+  "rejection_reason": null,
+  "fallback_used": false,
+  "validity_score": {
+    "rdab_score": 0.742,
+    "correctness": 0.85,
+    "code_quality": 0.70,
+    "efficiency": 0.80,
+    "stat_validity": 0.55
+  },
+  "latency_ms": 843.2,
+  "input_tokens": 1247,
+  "output_tokens": 312,
+  "cost_usd": 0.00000851,
+  "attempts": 1,
+  "circuit_breaker_state": "closed"
+}
+```
 
 ---
 
-## Quickstart (Local)
+## Dataset Benchmarking (POST /evaluate)
 
-### 1. Clone & configure
-
-```bash
-git clone https://github.com/patibandlavenkatamanideep/CostGuard.git
-cd CostGuard
-
-cp .env.example .env
-# Optional: add API keys for Live Mode. Leave blank for Simulation Mode.
-```
-
-### 2. Install & run
-
-```bash
-pip install -e .
-./scripts/dev.sh
-```
-
-Open:
-- Dashboard: **http://localhost:8501**
-- API Docs: **http://localhost:8000/docs**
-
-### 3. Docker
-
-```bash
-cp .env.example .env
-docker compose up
-```
-
----
-
-## Deploy to Railway
-
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/patibandlavenkatamanideep/CostGuard)
-
-**Exact steps:**
-
-```bash
-# 1. Install the Railway CLI
-npm install -g @railway/cli
-
-# 2. Authenticate
-railway login
-
-# 3. Link or create a project
-railway init
-
-# 4. Deploy (Railway reads railway.json automatically)
-railway up
-
-# 5. Get your public URL
-railway open
-```
-
-**Environment variables** (all optional — app fully works in Simulation Mode without any keys):
-
-| Variable | Purpose |
-|---|---|
-| `ANTHROPIC_API_KEY` | Enable Claude models in Live Mode |
-| `OPENAI_API_KEY` | Enable GPT models in Live Mode |
-| `GROQ_API_KEY` | Enable Llama / Mixtral via Groq |
-| `GEMINI_API_KEY` | Enable Gemini 2.5 Pro / Flash |
-| `XAI_API_KEY` | Enable Grok-3 / Grok-3 mini |
-
-> The container runs FastAPI (internal, port 8000) + Streamlit (public, `$PORT`) side-by-side via `scripts/start.sh`.
-
----
-
-## API Reference
-
-Auto-documented at `/docs` (Swagger) and `/redoc`.
-
-### POST `/evaluate`
+Upload any CSV or Parquet file. CostGuard runs it through RealDataAgentBench across 12 models and returns the best recommendation with exact cost estimates.
 
 ```bash
 curl -X POST https://costguard-production-3afa.up.railway.app/evaluate \
@@ -196,94 +158,128 @@ curl -X POST https://costguard-production-3afa.up.railway.app/evaluate \
   -F "num_questions=5"
 ```
 
-**Response:**
-```json
-{
-  "eval_id": "a3f9e1b2",
-  "status": "completed",
-  "dataset_stats": { "rows": 5000, "columns": 12 },
-  "recommended_model": {
-    "model_id": "gpt-4o-mini",
-    "display_name": "GPT-4o mini",
-    "accuracy_score": 0.87,
-    "estimated_total_cost_usd": 0.000423,
-    "latency_ms": 612
-  },
-  "recommendation_reason": "GPT-4o mini achieves the best balance...",
-  "copyable_config": "{ \"model\": \"gpt-4o-mini\", ... }"
-}
+---
+
+## Alerting
+
+Set environment variables to configure alert channels and thresholds.
+
+| Alert Type | Trigger | Default Threshold |
+|-----------|---------|------------------|
+| `ValidityThreshold` | Response validity below threshold | 0.25 |
+| `CostSpike` | Single call cost > N× rolling average | 3× |
+| `HighFailureRate` | >N% of recent calls failed | 20% |
+| `ConsecutiveLowValidity` | N consecutive low-validity responses | 3 |
+| `CircuitBreakerOpen` | Provider circuit breaker opened | — |
+| `RateLimit` | 429 response from provider | — |
+
+**Slack:**
+```bash
+export SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T.../B.../...
 ```
 
-### GET `/health`
+**Generic webhook** (PagerDuty, OpsGenie, etc.):
 ```bash
-curl https://costguard-production-3afa.up.railway.app/health
+export COSTGUARD_ALERT_WEBHOOK_URL=https://your-webhook.example.com/alerts
 ```
 
-### GET `/models`
-```bash
-curl https://costguard-production-3afa.up.railway.app/models
-```
+---
+
+## Monitoring
+
+CostGuard exposes a Prometheus `/metrics` endpoint. Key metrics:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `costguard_proxy_requests_total` | Counter | Proxy calls by model, provider, status |
+| `costguard_proxy_latency_seconds` | Histogram | LLM call latency per model |
+| `costguard_proxy_rejections_total` | Counter | Responses rejected below threshold |
+| `costguard_proxy_fallbacks_total` | Counter | Fallbacks triggered (primary → fallback) |
+| `costguard_eval_requests_total` | Counter | Dataset evaluations by mode and status |
+| `costguard_circuit_breaker_open` | Gauge | 1 if circuit breaker open for a provider |
+| `costguard_alerts_fired_total` | Counter | Alerts fired by type and channel |
+| `costguard_api_request_duration_seconds` | Histogram | API request latency |
 
 ---
 
 ## RDAB Scoring Methodology
 
-CostGuard uses [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) as its evaluation engine, scoring each model across **4 dimensions**:
+CostGuard uses [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) — **1,180+ evaluation runs across 39 tasks and 12 models** — to score every model on four dimensions:
 
 | Dimension | Weight | What It Measures |
 |-----------|--------|-----------------|
 | **Correctness** | 50% | Answer accuracy vs ground truth (fuzzy-matched, ±15% tolerance) |
 | **Code Quality** | 20% | Vectorised operations, naming conventions, no magic numbers |
-| **Efficiency** | 15% | Token + step budget adherence (Easy: 20K tokens, Medium: 50K) |
-| **Stat Validity** | 15% | Reports p-values, confidence intervals, avoids p-hacking |
+| **Efficiency** | 15% | Token + step budget adherence |
+| **Stat Validity** | 15% | Reports p-values, confidence intervals, avoids overconfident claims |
+
+**Key RDAB Benchmark Findings (1,180+ runs · 39 tasks · 12 models):**
+- **GPT-4.1** = top composite score at $0.013/task — best quality-per-dollar
+- **Gemini 2.5 Flash** = cheapest at $0.0015/task; only 20.6% below top score
+- **Stat validity gap**: model average 55.8% vs human expert baseline 81.3% — a real capability gap that CostGuard exposes
 
 ### Ranking Formula
-
-After RDAB scoring, models are ranked by a **composite score** that balances quality against cost:
-
 ```
 composite = rdab_score × 0.75 + cost_score × 0.25
-
-where:
-  cost_score = 1 − sqrt(model_cost / max_cost_in_cohort)
+cost_score = 1 − sqrt(model_cost / max_cost_in_cohort)
 ```
-
-**Why sqrt (not linear) cost normalisation?**  
-With linear normalisation, a model costing $0.001 and one costing $0.10 both score near 1.0 for cost — the difference barely moves the composite. With `sqrt`, cost differences are compressed non-linearly: a model that is 10× cheaper gets a meaningful reward (~68% of the maximum cost advantage), but a model that is 20% better on RDAB quality can still outrank a cheaper alternative. This reflects the real-world tradeoff: cost matters, but quality regressions should not be hidden by cheap pricing.
-
-**Weights explained:**
-- **75% RDAB score** — primary signal; reflects actual task performance on data similar to yours
-- **25% cost score** — secondary signal; prevents the cheapest model from always winning regardless of quality
-
-### Key RDAB Benchmark Findings (276 runs · 23 tasks · 12 models)
-
-- **GPT-4.1-mini** = top composite score (0.832) at $0.013/task — best quality-per-dollar
-- **GPT-5** = second overall (0.812) but 47× more expensive than GPT-4.1-mini ($0.596/task)
-- **Gemini 2.5 Flash** = cheapest at $0.0015/task; only 20.6% below top score
-- **Llama 3.3-70B (Groq)** = $0.002/task, ranks 7th — strongest open-weight option
-- **Stat validity gap**: model average 55.8% vs human expert baseline 81.3% on the same 5 tasks — a confirmed capability gap, not a scorer artefact
 
 ---
 
-## Business Impact
+## Supported Models
 
-| Use Case | Without CostGuard | With CostGuard |
-|----------|------------------|----------------|
-| Model selection | 2–3 days of testing | **15 seconds** |
-| Cost budgeting | Guesswork | Exact per-run estimates |
-| Over-provisioning | ~60% of teams use GPT-4o for tasks GPT-4.1 handles at 20% of the cost | Right-sized model every time |
-| Onboarding | Engineers research models manually | Copy one config block |
+| Model | Provider | Tier | Input $/1K | RDAB |
+|-------|----------|------|-----------|:----:|
+| Claude Sonnet 4.6 | Anthropic | Premium | $0.003 | ✓ |
+| Claude Opus 4.6 | Anthropic | Premium | $0.015 | ✓ |
+| Claude Haiku 4.5 | Anthropic | Economy | $0.00025 | ✓ |
+| **GPT-4.1** | OpenAI | Premium | **$0.002** | ✓ **Cost leader** |
+| GPT-4.1 mini | OpenAI | Balanced | $0.0004 | ✓ |
+| GPT-4.1 nano | OpenAI | Economy | $0.0001 | ✓ |
+| GPT-4o | OpenAI | Premium | $0.0025 | ✓ |
+| GPT-4o mini | OpenAI | Balanced | $0.00015 | ✓ |
+| GPT-5 | OpenAI | Premium | $0.015 | ✓ |
+| **Gemini 2.5 Flash** | Google | Economy | **$0.000075** | ✓ **Cheapest** |
+| Gemini 2.5 Pro | Google | Premium | $0.00125 | ✓ |
+| Llama 3.3 70B (Groq) | Groq | Balanced | $0.00059 | ✓ |
+| Mixtral 8x7B (Groq) | Groq | Economy | $0.00024 | ✓ |
+| Grok-3 | xAI | Premium | $0.003 | ✓ |
+| Grok-3 mini | xAI | Balanced | $0.0003 | ✓ |
 
-### Example savings (from RDAB benchmark data)
+---
 
-| Scenario | Old choice | CostGuard pick | Savings |
-|----------|-----------|----------------|---------|
-| Structured data analysis | GPT-4o: $0.0025/1K | GPT-4.1: $0.002/1K | **20% cheaper, same quality** |
-| Budget inference at scale | GPT-4o: $0.0025/1K | GPT-4o-mini: $0.00015/1K | **94% cheaper**, <5% accuracy drop |
-| Cheapest viable option | Claude Sonnet: $0.003/1K | Gemini 2.5 Flash: $0.000075/1K | **97.5% cheaper** |
-| Worst over-provisioning (RDAB) | Claude Haiku: 608K tokens | GPT-4.1: 30K tokens | **Same task — 20× fewer tokens** |
+## Quickstart (Local, No Docker)
 
-> GPT-5 costs $0.015/1K input — 200× more than Gemini 2.5 Flash. CostGuard tells you when that premium is justified.
+```bash
+git clone https://github.com/patibandlavenkatamanideep/CostGuard.git
+cd CostGuard
+cp .env.example .env
+pip install -e .
+./scripts/dev.sh
+```
+
+- Dashboard: **http://localhost:8501**
+- API Docs: **http://localhost:8000/docs**
+
+---
+
+## Deploy to Railway
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/patibandlavenkatamanideep/CostGuard)
+
+```bash
+npm install -g @railway/cli
+railway login && railway init && railway up
+```
+
+**Required environment variables for production:**
+
+| Variable | Purpose |
+|---|---|
+| `SECRET_KEY` | Signing key — generate with `openssl rand -hex 32` |
+| `COSTGUARD_DB_PATH` | SQLite path — use a persistent volume mount |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | At least one provider for Live Mode |
+| `SLACK_WEBHOOK_URL` | Optional — enables Slack alerting |
 
 ---
 
@@ -292,29 +288,77 @@ With linear normalisation, a model costing $0.001 and one costing $0.10 both sco
 ```
 costguard/
 ├── backend/
-│   ├── main.py          # FastAPI app, routes, middleware
-│   ├── config.py        # Pydantic settings, env vars
-│   ├── models.py        # Request/response schemas
-│   └── logger.py        # Structured logging
+│   ├── main.py            # FastAPI app — routes, middleware wiring
+│   ├── proxy.py           # Real-time LLM proxy + auto-reject/fallback  ← NEW
+│   ├── alerting.py        # Comprehensive alert engine (6 alert types)  ← NEW
+│   ├── metrics.py         # Prometheus metrics + OTEL setup             ← NEW
+│   ├── middleware.py      # RequestID + RateLimit + SecurityHeaders      ← NEW
+│   ├── circuit_breaker.py # Per-provider circuit breaker                ← NEW
+│   ├── config.py          # Pydantic settings
+│   ├── models.py          # Request/response schemas
+│   └── logger.py          # Structured logging (loguru)
 ├── evaluation/
-│   ├── engine.py        # Core evaluation orchestrator
-│   ├── data_loader.py   # CSV/Parquet ingestion & validation
-│   ├── pricing.py       # Model pricing catalogue
-│   ├── question_generator.py  # RDAB-style question generation
-│   └── token_counter.py # Token estimation
+│   ├── engine.py          # RDAB evaluation orchestrator
+│   ├── observability.py   # SQLite logging + drift detection (WAL mode) ← FIXED
+│   ├── data_loader.py     # CSV/Parquet ingestion
+│   ├── pricing.py         # 15-model pricing catalogue
+│   ├── question_generator.py
+│   └── token_counter.py
 ├── frontend/
-│   └── app.py           # Streamlit dashboard
+│   └── app.py             # Streamlit dashboard
+├── deploy/
+│   ├── prometheus.yml     # Prometheus scrape config                    ← NEW
+│   └── grafana/           # Grafana dashboard + datasource provisioning ← NEW
 ├── tests/
 │   └── test_evaluation.py
 ├── scripts/
-│   ├── dev.sh           # Local dev startup
-│   └── start.sh         # Production single-container startup
-├── .github/workflows/ci.yml
+│   ├── dev.sh
+│   └── start.sh
+├── .github/workflows/ci.yml  # CI + security scanning (Bandit + Trivy) ← UPDATED
 ├── Dockerfile
-├── docker-compose.yml
-├── railway.json
-├── render.yaml
+├── docker-compose.yml        # With named volume + monitoring profile   ← FIXED
 └── pyproject.toml
+```
+
+---
+
+## API Reference
+
+Full docs at `/docs` (Swagger) and `/redoc`.
+
+### POST `/proxy` — Real-time LLM guard
+```bash
+curl -X POST http://localhost:8000/proxy \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_id": "gpt-4.1",
+    "prompt": "Analyze revenue trends",
+    "reject_threshold": 0.30,
+    "fallback_models": ["claude-sonnet-4-6"]
+  }'
+```
+
+### POST `/evaluate` — Dataset benchmarking
+```bash
+curl -X POST http://localhost:8000/evaluate \
+  -F "file=@my_data.csv" \
+  -F "task_description=Analyze churn patterns"
+```
+
+### GET `/health` — Deep health check
+```bash
+curl http://localhost:8000/health
+# {"status":"ok","db_ok":true,"rdab_available":true,"circuit_breakers":{...}}
+```
+
+### GET `/metrics` — Prometheus scrape
+```bash
+curl http://localhost:8000/metrics
+```
+
+### GET `/proxy/status` — Circuit breaker states
+```bash
+curl http://localhost:8000/proxy/status
 ```
 
 ---
@@ -322,66 +366,31 @@ costguard/
 ## Development
 
 ```bash
-# Run tests
 pytest tests/ -v
-
-# Integration tests (requires running server)
-pytest tests/ -m integration
-
-# Lint & format
-ruff check .
-ruff format .
-
-# Type check
+ruff check . && ruff format .
 mypy backend/ evaluation/
 ```
 
 ---
 
-## Layer 4 — Observability & Alerting
+## Production Readiness Checklist
 
-CostGuard includes a lightweight observability layer that logs every evaluation, tracks score history, and detects model degradation automatically.
-
-### What it does
-
-| Capability | Detail |
-|---|---|
-| **Evaluation logging** | Every run is persisted to a local SQLite file (no external service required) |
-| **Historical averages** | Per-model average RDAB scores accumulate across runs |
-| **Drift detection** | If a model's current score drops >10% below its historical average, a drift event is recorded |
-| **Slack alerts** | Optional Slack webhook fires automatically when drift is detected |
-| **History & Alerts tab** | A dedicated Streamlit tab shows recent evaluations, drift events, and model averages |
-
-### Storage
-
-**Your uploaded data is never stored.** CostGuard writes only evaluation metadata — model scores, cost estimates, timestamps, and a dataset fingerprint (SHA-256 hash) — to a local SQLite file. The raw file contents are processed entirely in memory and discarded immediately after scoring.
-
-All metadata is written to a single SQLite file (default: `/tmp/costguard_history.db`). Override the path:
-
-```bash
-export COSTGUARD_DB_PATH=/var/data/costguard.db
-```
-
-Two tables:
-- `evaluations` — one row per completed evaluation (model, scores, cost, timestamp, dataset hash)
-- `drift_events` — recorded when a model's score drops >10% below its historical average
-
-### Slack alerts (optional)
-
-Set `SLACK_WEBHOOK_URL` in your environment to enable drift notifications:
-
-```bash
-export SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T.../B.../...
-```
-
-Alert fires only when drift is detected and the webhook is configured. No webhook = silent logging only.
-
-### Business value
-
-- **Catch regressions early** — if a provider silently degrades, you'll know before it affects production workloads.
-- **Audit trail** — every recommendation is logged with a dataset fingerprint, making it trivial to replay or dispute a cost decision.
-- **Trend analysis** — the Model Averages tab shows which models are consistently strong on your data type over time, not just on a single run.
-- **Zero infra overhead** — SQLite means no Postgres, Redis, or external service to operate. Works out of the box on Railway and local dev.
+- [x] Real-time proxy with auto-reject + fallback (`POST /proxy`)
+- [x] Per-IP rate limiting (configurable per endpoint)
+- [x] Per-provider circuit breaker
+- [x] Prometheus metrics endpoint + Grafana docker-compose profile
+- [x] 6 alert types: validity, cost spike, failure rate, consecutive low validity, circuit breaker, rate limit
+- [x] Slack + generic webhook alert channels
+- [x] SQLite WAL mode (concurrent read/write safe)
+- [x] Named Docker volume (history DB survives container restarts)
+- [x] Request ID propagation through all logs
+- [x] Security headers (X-Frame-Options, X-Content-Type-Options, etc.)
+- [x] OpenTelemetry traces (activate via OTEL_EXPORTER_OTLP_ENDPOINT)
+- [x] Non-root Docker user
+- [x] Multi-stage Dockerfile build
+- [x] Deep health check (DB + circuit breakers + RDAB availability)
+- [x] CI security scanning (Bandit + Trivy + pip-audit)
+- [x] Deployment health verification in CI
 
 ---
 
@@ -389,13 +398,9 @@ Alert fires only when drift is detected and the webhook is configured. No webhoo
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
----
-
 ## Security
 
 See [SECURITY.md](SECURITY.md). Report vulnerabilities to security@costguard.dev.
-
----
 
 ## License
 
@@ -403,4 +408,4 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-*Built with FastAPI, Streamlit, and RealDataAgentBench. The best model is the one that fits your data — and your budget.*
+*Built with FastAPI, Streamlit, and RealDataAgentBench. Every LLM call deserves a reliability check before reaching production.*

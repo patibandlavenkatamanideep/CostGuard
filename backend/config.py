@@ -23,6 +23,20 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     secret_key: str = Field(default="dev-secret-change-in-prod")
 
+    @field_validator("secret_key")
+    @classmethod
+    def validate_secret_key(cls, v: str, info) -> str:
+        if v == "dev-secret-change-in-prod":
+            import os
+            if os.getenv("APP_ENV", "production") == "production":
+                import warnings
+                warnings.warn(
+                    "SECRET_KEY is set to the default development value. "
+                    "Generate a real key: openssl rand -hex 32",
+                    stacklevel=2,
+                )
+        return v
+
     # ── API ─────────────────────────────────────────────────────────────────
     api_host: str = "0.0.0.0"
     api_port: int = 8000

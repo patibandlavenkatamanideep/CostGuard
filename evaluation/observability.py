@@ -69,6 +69,10 @@ def _db():
     import sqlite3
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
+    # WAL mode: allows concurrent readers while a writer is active.
+    # Critical for production — without this, concurrent evaluations block each other.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
     try:
         yield conn
         conn.commit()
@@ -77,7 +81,7 @@ def _db():
 
 
 def init_db() -> None:
-    """Create tables and indexes if they don't exist yet."""
+    """Create tables and indexes if they don't exist yet. Safe to call multiple times."""
     with _db() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS evaluations (
@@ -107,11 +111,44 @@ def init_db() -> None:
                 eval_id        TEXT    NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS proxy_calls (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                call_id       TEXT    NOT NULL,
+                timestamp     REAL    NOT NULL,
+                model_id      TEXT    NOT NULL,
+                accepted      INTEGER NOT NULL DEFAULT 1,
+                validity_score REAL   NOT NULL,
+                cost_usd      REAL    NOT NULL,
+                latency_ms    REAL    NOT NULL,
+                input_tokens  INTEGER NOT NULL DEFAULT 0,
+                output_tokens INTEGER NOT NULL DEFAULT 0,
+                fallback_used INTEGER NOT NULL DEFAULT 0,
+                attempts      INTEGER NOT NULL DEFAULT 1
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS alert_history (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp   REAL    NOT NULL,
+                alert_type  TEXT    NOT NULL,
+                severity    TEXT    NOT NULL,
+                model_id    TEXT    NOT NULL,
+                message     TEXT    NOT NULL,
+                call_id     TEXT    NOT NULL DEFAULT ''
+            )
+        """)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_eval_model ON evaluations(recommended_model)"
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_eval_ts    ON evaluations(timestamp)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_proxy_ts   ON proxy_calls(timestamp)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_proxy_model ON proxy_calls(model_id)"
         )
 
 
@@ -285,6 +322,73 @@ def _send_slack_alert(
                 )
     except Exception as exc:
         logger.warning(f"[observability] Slack alert failed: {exc}")
+
+
+# ─── Proxy call logging ───────────────────────────────────────────────────────
+
+def log_proxy_call(call_data: dict) -> None:
+    """Log a single proxy call to the proxy_calls table."""
+    try:
+        init_db()
+        with _db() as conn:
+            conn.execute(
+                """
+                INSERT INTO proxy_calls
+                    (call_id, timestamp, model_id, accepted, validity_score,
+                     cost_usd, latency_ms, input_tokens, output_tokens,
+                     fallback_used, attempts)
+                VALUES
+                    (:call_id, :timestamp, :model_id, :accepted, :validity_score,
+                     :cost_usd, :latency_ms, :input_tokens, :output_tokens,
+                     :fallback_used, :attempts)
+                """,
+                {
+                    "call_id": call_data.get("call_id", ""),
+                    "timestamp": time.time(),
+                    "model_id": call_data.get("model_id", "unknown"),
+                    "accepted": 1 if call_data.get("accepted", True) else 0,
+                    "validity_score": call_data.get("validity_score", 0.0),
+                    "cost_usd": call_data.get("cost_usd", 0.0),
+                    "latency_ms": call_data.get("latency_ms", 0.0),
+                    "input_tokens": call_data.get("input_tokens", 0),
+                    "output_tokens": call_data.get("output_tokens", 0),
+                    "fallback_used": 1 if call_data.get("fallback_used", False) else 0,
+                    "attempts": call_data.get("attempts", 1),
+                },
+            )
+    except Exception as exc:
+        logger.warning(f"[observability] Failed to log proxy call: {exc}")
+
+
+def get_recent_proxy_calls(limit: int = 100) -> list[dict]:
+    """Return most recent proxy calls for dashboard display."""
+    init_db()
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM proxy_calls ORDER BY timestamp DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_proxy_stats() -> dict:
+    """Aggregate proxy call statistics for dashboard."""
+    init_db()
+    with _db() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                COUNT(*)                    AS total_calls,
+                AVG(validity_score)         AS avg_validity,
+                AVG(cost_usd)               AS avg_cost_usd,
+                AVG(latency_ms)             AS avg_latency_ms,
+                SUM(CASE WHEN accepted=0 THEN 1 ELSE 0 END) AS rejections,
+                SUM(CASE WHEN fallback_used=1 THEN 1 ELSE 0 END) AS fallbacks,
+                SUM(cost_usd)               AS total_cost_usd
+            FROM proxy_calls
+            """
+        ).fetchone()
+    return dict(row) if row else {}
 
 
 # ─── Query helpers (used by Streamlit dashboard) ──────────────────────────────
