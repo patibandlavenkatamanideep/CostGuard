@@ -79,7 +79,8 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./deploy/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./deploy/grafana/dashboards/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./deploy/grafana/dashboards/costguard.json:/etc/grafana/provisioning/dashboards/costguard.json:ro
       - ./deploy/grafana/datasources:/etc/grafana/provisioning/datasources:ro
     depends_on:
       - prometheus

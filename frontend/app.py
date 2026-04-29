@@ -461,10 +461,10 @@ st.markdown("""
     Benchmark 12 LLMs on your actual data. Get a model recommendation with exact cost estimates — no guesswork, no sign-up.
   </p>
   <div class="hero-pills">
-    <span class="hero-pill">12 Models</span>
-    <span class="hero-pill">4-Dimensional RDAB Scoring</span>
+    <span class="hero-pill">15 Models · 5 Providers</span>
+    <span class="hero-pill">1,180+ RDAB Benchmark Runs</span>
+    <span class="hero-pill">Real-Time Proxy + Auto-Reject</span>
     <span class="hero-pill">Simulation — No API Keys Needed</span>
-    <span class="hero-pill">Data never stored</span>
     <span class="hero-pill">Self-host with Docker</span>
   </div>
 </div>
@@ -662,7 +662,7 @@ if result := st.session_state.get("result"):
         "citing p-values, confidence intervals, and avoiding overconfident claims. "
         "All 12 models average **55.8%** here — versus a human expert baseline of **81.3%** "
         "on the same 5 tasks. That 25-point gap is a real model capability difference, "
-        "confirmed across 276 runs in the RDAB benchmark: "
+        "confirmed across 1,180+ runs in the RDAB benchmark: "
         "LLMs compute accurately but rarely add statistical rigour unprompted. "
         "It does **not** affect the model's ability to answer your data questions correctly — "
         "and it's exactly the kind of gap a cost-optimisation tool should surface.",
@@ -968,7 +968,7 @@ st.markdown("""
   <div class="cs-eyebrow">Real Case Study · CostGuard on CostGuard</div>
   <div class="cs-title">GPT-4.1 over GPT-5 — same quality, 87% cheaper</div>
   <div class="cs-body">
-    We ran <strong>276 RDAB evaluations</strong> across 23 data analysis tasks and 12 models — the same benchmark
+    We ran <strong>1,180+ RDAB evaluations</strong> across 39 tasks and 12 models — the same benchmark
     that powers every recommendation in this tool. CostGuard recommended <strong>GPT-4.1</strong> over <strong>GPT-5</strong>
     for structured data analysis. GPT-4.1 scored <strong>88% RDAB</strong> (vs 79% for GPT-5)
     and cost <strong>$0.0140 per run</strong> versus <strong>$0.1053 for GPT-5</strong>.<br><br>
@@ -978,7 +978,7 @@ st.markdown("""
   </div>
   <div class="cs-stats">
     <div class="cs-stat">
-      <div class="cs-stat-val">276</div>
+      <div class="cs-stat-val">1,180+</div>
       <div class="cs-stat-lbl">RDAB evaluation runs</div>
     </div>
     <div class="cs-stat">
@@ -1007,7 +1007,134 @@ st.markdown(
 )
 st.caption("Every evaluation is logged locally. Score drift (>10% drop from average) triggers an alert.")
 
-_hist_tab, _drift_tab, _avg_tab, _spend_tab = st.tabs(["Recent Evaluations", "Drift Events", "Model Averages", "Spend Monitor"])
+_proxy_tab, _hist_tab, _drift_tab, _avg_tab, _spend_tab = st.tabs([
+    "Proxy Monitor", "Recent Evaluations", "Drift Events", "Model Averages", "Spend Monitor"
+])
+
+with _proxy_tab:
+    st.markdown("#### Proxy Monitor — Real-Time Guard Statistics")
+    st.caption(
+        "Every call through `POST /proxy` is logged here with validity score, cost, latency, and fallback usage. "
+        "Use this tab to monitor your live agent reliability in real time."
+    )
+
+    # ── Import proxy helpers ──────────────────────────────────────────────────
+    try:
+        from evaluation.observability import get_recent_proxy_calls, get_proxy_stats
+
+        _proxy_stats = get_proxy_stats()
+        _proxy_calls = get_recent_proxy_calls(limit=100)
+
+        # ── Aggregate stats row ───────────────────────────────────────────────
+        _total_calls  = _proxy_stats.get("total_calls", 0) or 0
+        _avg_validity = _proxy_stats.get("avg_validity") or 0.0
+        _avg_cost     = _proxy_stats.get("avg_cost_usd") or 0.0
+        _avg_latency  = _proxy_stats.get("avg_latency_ms") or 0.0
+        _rejections   = _proxy_stats.get("rejections") or 0
+        _fallbacks    = _proxy_stats.get("fallbacks") or 0
+        _total_cost   = _proxy_stats.get("total_cost_usd") or 0.0
+        _accept_rate  = ((_total_calls - _rejections) / _total_calls * 100) if _total_calls > 0 else 100.0
+
+        if _total_calls == 0:
+            st.info(
+                "No proxy calls logged yet.\n\n"
+                "**Quick start:** Send a request to `POST /proxy` to see live data here.\n\n"
+                "```bash\ncurl -X POST http://localhost:8000/proxy \\\\\n"
+                "  -H 'Content-Type: application/json' \\\\\n"
+                "  -d '{\"model_id\": \"llama-3.3-70b-versatile\", \"prompt\": \"Analyze Q3 trends\", "
+                "\"reject_threshold\": 0.30}'\n```",
+                icon="📡",
+            )
+        else:
+            # ── KPI row ───────────────────────────────────────────────────────
+            _pk1, _pk2, _pk3, _pk4, _pk5 = st.columns(5)
+            _pk1.metric("Total Calls", f"{_total_calls:,}")
+            _pk2.metric("Acceptance Rate", f"{_accept_rate:.1f}%",
+                        delta=f"{_accept_rate - 100:.1f}%" if _accept_rate < 100 else None,
+                        delta_color="inverse")
+            _pk3.metric("Avg Validity", f"{_avg_validity:.3f}")
+            _pk4.metric("Avg Latency", f"{_avg_latency:.0f} ms")
+            _pk5.metric("Total Cost", f"${_total_cost:.6f}")
+
+            # ── Rejection + fallback summary ──────────────────────────────────
+            if _rejections > 0 or _fallbacks > 0:
+                _rej_rate = _rejections / _total_calls * 100
+                _fb_rate  = _fallbacks  / _total_calls * 100
+                st.markdown(
+                    f'<div class="spend-alert">'
+                    f'<div class="spend-alert-title">Reliability Summary</div>'
+                    f'<div class="spend-alert-body">'
+                    f'{_rejections} response{"s" if _rejections != 1 else ""} rejected ({_rej_rate:.1f}%) &nbsp;·&nbsp; '
+                    f'{_fallbacks} fallback{"s" if _fallbacks != 1 else ""} triggered ({_fb_rate:.1f}%)'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    '<div class="spend-ok"><div class="spend-ok-body">'
+                    '✅ 100% acceptance rate — all responses passed validity threshold.'
+                    '</div></div>',
+                    unsafe_allow_html=True,
+                )
+
+            # ── Recent calls table ────────────────────────────────────────────
+            if _proxy_calls:
+                import datetime as _dt_p
+                import pandas as _pd_p
+                _df_proxy = _pd_p.DataFrame(_proxy_calls)
+                _df_proxy["time"] = _df_proxy["timestamp"].apply(
+                    lambda ts: _dt_p.datetime.fromtimestamp(ts).strftime("%H:%M:%S")
+                )
+                _df_proxy["accepted"] = _df_proxy["accepted"].map(lambda v: "✅ yes" if v else "❌ no")
+                _df_proxy["fallback"] = _df_proxy["fallback_used"].map(lambda v: "↩ yes" if v else "—")
+                _df_proxy["validity"] = _df_proxy["validity_score"].map("{:.3f}".format)
+                _df_proxy["cost"]     = _df_proxy["cost_usd"].map("${:.6f}".format)
+                _df_proxy["latency"]  = _df_proxy["latency_ms"].map("{:.0f} ms".format)
+
+                _show = _df_proxy[["time", "call_id", "model_id", "accepted",
+                                   "validity", "cost", "latency", "fallback", "attempts"]]
+                _show.columns = ["Time", "Call ID", "Model", "Accepted",
+                                 "Validity", "Cost", "Latency", "Fallback", "Attempts"]
+                st.dataframe(_show, use_container_width=True, hide_index=True)
+
+            # ── Validity distribution chart ───────────────────────────────────
+            if len(_proxy_calls) >= 3:
+                import plotly.express as _px_p
+                _df_v = _pd_p.DataFrame(_proxy_calls)
+                _fig_v = _px_p.histogram(
+                    _df_v,
+                    x="validity_score",
+                    nbins=20,
+                    title="Validity Score Distribution (all proxy calls)",
+                    labels={"validity_score": "Validity Score", "count": "Calls"},
+                    color_discrete_sequence=["#4f46e5"],
+                )
+                _fig_v.update_layout(
+                    height=280, plot_bgcolor="#ffffff", paper_bgcolor="#ffffff",
+                    font=dict(family="Inter", color="#111827"),
+                    margin=dict(l=0, r=0, t=40, b=0),
+                )
+                st.plotly_chart(_fig_v, use_container_width=True)
+
+    except Exception as _pe:
+        st.info(f"Proxy data unavailable: {_pe}")
+
+    st.markdown("---")
+    st.markdown("**How to use the proxy in your agent:**")
+    st.code(
+        'import httpx\n\n'
+        'resp = httpx.post("http://localhost:8000/proxy", json={\n'
+        '    "model_id": "llama-3.3-70b-versatile",  # or gemini-2.5-flash\n'
+        '    "prompt": "Your prompt here",\n'
+        '    "reject_threshold": 0.30,\n'
+        '    "fallback_models": ["gemini-2.5-flash"],\n'
+        '}).json()\n\n'
+        'print(resp["content"])        # LLM response\n'
+        'print(resp["accepted"])       # True if validity >= threshold\n'
+        'print(resp["validity_score"]) # RDAB scorecard\n'
+        'print(resp["cost_usd"])       # exact cost for this call',
+        language="python",
+    )
 
 with _hist_tab:
     try:

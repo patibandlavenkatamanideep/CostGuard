@@ -324,7 +324,7 @@ def get_simulation_disclaimer() -> str:
         "SIMULATION MODE — scores are NOT based on your uploaded data.\n\n"
         "What these scores represent:\n"
         "  • Baseline values are drawn from the RDAB benchmark leaderboard "
-        "(276 runs · 23 tasks · 12 models, April 2026 release), not from "
+        "(1,180+ runs · 39 tasks · 12 models, April 2026 release), not from "
         "live inference on your specific file.\n"
         "  • A dataset-specific jitter of up to ±3.5% is applied by hashing "
         "your file's row count, column count, and column names. This makes "
@@ -371,7 +371,7 @@ def _simulate_scorecard(
     }[pricing.tier]
 
     overrides: dict[str, dict[str, float]] = {
-        # Sourced from RDAB leaderboard (276 runs · 23 tasks · 12 models)
+        # Sourced from RDAB leaderboard (1,180+ runs · 39 tasks · 12 models)
         "gpt-4.1":                    {"correctness": 0.93, "efficiency": 0.97},
         "gemini-2.5-flash":           {"efficiency": 0.95},
         "llama-3.3-70b-versatile":    {"correctness": 0.82, "code_quality": 0.78},
@@ -427,7 +427,7 @@ def _compute_confidence(
     """
     import statistics as _stats
 
-    # Base: simulation is calibrated from 276 RDAB runs but not from your data
+    # Base: simulation is calibrated from 1,180+ RDAB runs but not from your data
     score = 0.60 if is_live else 0.40
     mode_note = "live benchmark" if is_live else "simulation"
 
