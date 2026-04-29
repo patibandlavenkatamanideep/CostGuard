@@ -461,7 +461,7 @@ st.markdown("""
     Benchmark 12 LLMs on your actual data. Get a model recommendation with exact cost estimates — no guesswork, no sign-up.
   </p>
   <div class="hero-pills">
-    <span class="hero-pill">15 Models · 5 Providers</span>
+    <span class="hero-pill">12 RDAB-Benchmarked · 5 Providers</span>
     <span class="hero-pill">1,180+ RDAB Benchmark Runs</span>
     <span class="hero-pill">Real-Time Proxy + Auto-Reject</span>
     <span class="hero-pill">Simulation — No API Keys Needed</span>
