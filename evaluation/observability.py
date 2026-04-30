@@ -138,6 +138,13 @@ def init_db() -> None:
                 call_id     TEXT    NOT NULL DEFAULT ''
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS runtime_state (
+                key        TEXT PRIMARY KEY,
+                value_json TEXT NOT NULL,
+                updated_at REAL NOT NULL
+            )
+        """)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_eval_model ON evaluations(recommended_model)"
         )
@@ -449,3 +456,51 @@ def get_total_eval_count() -> int:
     with _db() as conn:
         row = conn.execute("SELECT COUNT(*) AS cnt FROM evaluations").fetchone()
     return row["cnt"]
+
+
+# ─── Runtime state persistence ────────────────────────────────────────────────
+# Persists circuit breaker and alerting state across process restarts.
+# This is appropriate for single-node deployments. Multi-replica deployments
+# need a shared backend (Redis). Set COSTGUARD_STATE_BACKEND=none to disable.
+
+_STATE_BACKEND = os.getenv("COSTGUARD_STATE_BACKEND", "sqlite").lower()
+
+
+def _state_enabled() -> bool:
+    return _STATE_BACKEND == "sqlite"
+
+
+def save_runtime_state(key: str, value: dict) -> None:
+    """Persist an arbitrary JSON-serializable dict under `key`."""
+    if not _state_enabled():
+        return
+    try:
+        init_db()
+        with _db() as conn:
+            conn.execute(
+                """
+                INSERT INTO runtime_state (key, value_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,
+                                               updated_at=excluded.updated_at
+                """,
+                (key, json.dumps(value), time.time()),
+            )
+    except Exception as exc:
+        logger.warning(f"[observability] Failed to save runtime state '{key}': {exc}")
+
+
+def load_runtime_state(key: str) -> dict | None:
+    """Load a previously saved runtime state dict. Returns None if not found."""
+    if not _state_enabled():
+        return None
+    try:
+        init_db()
+        with _db() as conn:
+            row = conn.execute(
+                "SELECT value_json FROM runtime_state WHERE key = ?", (key,)
+            ).fetchone()
+        return json.loads(row["value_json"]) if row else None
+    except Exception as exc:
+        logger.warning(f"[observability] Failed to load runtime state '{key}': {exc}")
+        return None

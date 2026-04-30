@@ -226,3 +226,129 @@ class TestLRUBucketDict:
         b1 = d["192.168.1.1"]
         b2 = d["192.168.1.1"]
         assert b1 is b2
+
+
+# ─── Retry helper ─────────────────────────────────────────────────────────────
+
+class TestIsRetryable:
+    def test_429_is_retryable(self):
+        from backend.proxy import _is_retryable
+        assert _is_retryable(Exception("HTTP 429 Too Many Requests"))
+
+    def test_rate_limit_is_retryable(self):
+        from backend.proxy import _is_retryable
+        assert _is_retryable(Exception("rate limit exceeded"))
+
+    def test_503_is_retryable(self):
+        from backend.proxy import _is_retryable
+        assert _is_retryable(Exception("503 Service Unavailable"))
+
+    def test_overloaded_is_retryable(self):
+        from backend.proxy import _is_retryable
+        assert _is_retryable(Exception("model overloaded"))
+
+    def test_timeout_not_retryable(self):
+        from backend.proxy import _is_retryable
+        assert not _is_retryable(asyncio.TimeoutError())
+
+    def test_http_exception_not_retryable(self):
+        from backend.proxy import _is_retryable
+        from fastapi import HTTPException
+        assert not _is_retryable(HTTPException(status_code=400, detail="bad"))
+
+    def test_auth_error_not_retryable(self):
+        from backend.proxy import _is_retryable
+        assert not _is_retryable(Exception("401 Unauthorized"))
+
+    def test_connection_refused_retryable(self):
+        from backend.proxy import _is_retryable
+        assert _is_retryable(ConnectionError("connection refused"))
+
+
+# ─── Circuit Breaker State Persistence ───────────────────────────────────────
+
+class TestCircuitBreakerPersistence:
+    def test_save_and_restore_open_state(self, tmp_path, monkeypatch):
+        """CB state saved in one registry should reload correctly in a new one."""
+        import os
+        db_path = tmp_path / "test_state.db"
+        monkeypatch.setenv("COSTGUARD_DB_PATH", str(db_path))
+        monkeypatch.setenv("COSTGUARD_STATE_BACKEND", "sqlite")
+        # Invalidate lru_cache so settings pick up new env
+        from backend.config import get_settings
+        get_settings.cache_clear()
+
+        reg1 = CircuitBreakerRegistry()
+        cb1 = reg1.get("openai")
+        for _ in range(5):
+            cb1.record_failure()
+        assert cb1.state == "open"
+        reg1.save_state()
+
+        reg2 = CircuitBreakerRegistry()
+        reg2.load_state()
+        cb2 = reg2.get("openai")
+        assert cb2._state == "open"
+        assert cb2._failure_count == 5
+
+        get_settings.cache_clear()
+
+    def test_save_and_restore_closed_state(self, tmp_path, monkeypatch):
+        db_path = tmp_path / "test_state2.db"
+        monkeypatch.setenv("COSTGUARD_DB_PATH", str(db_path))
+        monkeypatch.setenv("COSTGUARD_STATE_BACKEND", "sqlite")
+        from backend.config import get_settings
+        get_settings.cache_clear()
+
+        reg1 = CircuitBreakerRegistry()
+        reg1.get("anthropic")  # register without any failures
+        reg1.save_state()
+
+        reg2 = CircuitBreakerRegistry()
+        reg2.load_state()
+        assert reg2.get("anthropic")._state == "closed"
+
+        get_settings.cache_clear()
+
+    def test_load_state_no_prior_data(self, tmp_path, monkeypatch):
+        """load_state with an empty DB should not raise and leave CB at defaults."""
+        db_path = tmp_path / "empty.db"
+        monkeypatch.setenv("COSTGUARD_DB_PATH", str(db_path))
+        monkeypatch.setenv("COSTGUARD_STATE_BACKEND", "sqlite")
+        from backend.config import get_settings
+        get_settings.cache_clear()
+
+        reg = CircuitBreakerRegistry()
+        reg.load_state()  # must not raise
+        assert reg.get("openai").state == "closed"
+
+        get_settings.cache_clear()
+
+
+# ─── Alert Engine State Persistence ──────────────────────────────────────────
+
+class TestAlertEnginePersistence:
+    def test_save_and_restore_cooldowns(self, tmp_path, monkeypatch):
+        db_path = tmp_path / "alert_state.db"
+        monkeypatch.setenv("COSTGUARD_DB_PATH", str(db_path))
+        monkeypatch.setenv("COSTGUARD_STATE_BACKEND", "sqlite")
+        from backend.config import get_settings
+        get_settings.cache_clear()
+
+        eng1 = AlertEngine()
+        eng1._last_fired["validity:gpt-4.1"] = 1234567890.0
+        eng1._consecutive_low["gpt-4.1"] = 3
+        eng1.save_state()
+
+        eng2 = AlertEngine()
+        eng2.load_state()
+        assert eng2._last_fired.get("validity:gpt-4.1") == 1234567890.0
+        assert eng2._consecutive_low.get("gpt-4.1") == 3
+
+        get_settings.cache_clear()
+
+    def test_load_state_disabled_backend(self, monkeypatch):
+        monkeypatch.setenv("COSTGUARD_STATE_BACKEND", "none")
+        eng = AlertEngine()
+        eng.load_state()   # must not raise or write anything
+        eng.save_state()   # must not raise

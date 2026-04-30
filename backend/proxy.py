@@ -24,6 +24,13 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
+from tenacity import (
+    RetryError,
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from backend.alerting import AlertEngine
 from backend.circuit_breaker import CircuitBreakerRegistry
@@ -53,9 +60,32 @@ _openai_default: Any = None
 _groq_default: Any = None
 _xai_default: Any = None
 
-# Gemini's google-generativeai uses module-level configure() — lock prevents
-# concurrent requests with different keys from stomping on each other.
-_gemini_lock = asyncio.Lock()
+# ─── Retry configuration ──────────────────────────────────────────────────────
+
+_RETRY_ATTEMPTS = 3      # total attempts (1 original + 2 retries)
+_RETRY_WAIT_MIN = 1.0    # seconds before first retry
+_RETRY_WAIT_MAX = 8.0    # cap on exponential backoff
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    """
+    Return True for transient provider errors worth retrying.
+    Excludes configuration errors (HTTPException) and per-attempt timeouts.
+    """
+    if isinstance(exc, (asyncio.TimeoutError, HTTPException)):
+        return False
+    s = str(exc).lower()
+    return (
+        "429" in str(exc)
+        or "rate_limit" in s
+        or "rate limit" in s
+        or "too many requests" in s
+        or "503" in str(exc)
+        or "service unavailable" in s
+        or "overloaded" in s
+        or ("connection" in s and "refused" in s)
+        or isinstance(exc, (ConnectionError, OSError))
+    )
 
 
 def _get_anthropic(key: str):
@@ -266,25 +296,26 @@ async def _call_gemini(
     model_id: str, prompt: str, system: str | None,
     max_tokens: int, temp: float, key: str,
 ) -> tuple[str, int, int]:
-    import google.generativeai as genai
-    # google-generativeai uses module-level global state for the API key.
-    # The lock ensures concurrent requests don't stomp on each other's key.
-    # Limitation: this serializes concurrent Gemini calls. The proper fix is
-    # migrating to the newer google-genai SDK which has a proper client object.
-    async with _gemini_lock:
-        genai.configure(api_key=key)
-        model = genai.GenerativeModel(
-            model_name=model_id,
-            system_instruction=system or "",
-            generation_config=genai.GenerationConfig(
-                max_output_tokens=max_tokens,
-                temperature=temp,
-            ),
-        )
-        response = await model.generate_content_async(prompt)
+    # google-genai (>= 1.0) provides a proper client object — no global state,
+    # no lock needed. Concurrent calls with different keys are fully safe.
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=key)
+    config = types.GenerateContentConfig(
+        system_instruction=system or "",
+        max_output_tokens=max_tokens,
+        temperature=temp,
+    )
+    response = await client.aio.models.generate_content(
+        model=model_id,
+        contents=prompt,
+        config=config,
+    )
     text = response.text or ""
-    in_tok = getattr(getattr(response, "usage_metadata", None), "prompt_token_count", 0) or 0
-    out_tok = getattr(getattr(response, "usage_metadata", None), "candidates_token_count", 0) or 0
+    usage = response.usage_metadata
+    in_tok = (usage.prompt_token_count or 0) if usage else 0
+    out_tok = (usage.candidates_token_count or 0) if usage else 0
     return text, in_tok, out_tok
 
 
@@ -306,6 +337,39 @@ async def _call_xai(
     text = resp.choices[0].message.content or ""
     usage = resp.usage
     return text, usage.prompt_tokens if usage else 0, usage.completion_tokens if usage else 0
+
+
+# ─── Retry wrapper ────────────────────────────────────────────────────────────
+
+async def _call_llm_with_retry(
+    model_id: str,
+    prompt: str,
+    system_prompt: str | None,
+    max_tokens: int,
+    temperature: float,
+    api_key: str | None,
+) -> tuple[str, int, int]:
+    """
+    Call _call_llm with per-attempt timeout and exponential backoff for transient
+    errors (429 rate limits, 503, connection refused).
+
+    Non-retryable errors (HTTPException for bad config/auth, asyncio.TimeoutError
+    for hung calls) are re-raised immediately.
+    """
+
+    @retry(
+        stop=stop_after_attempt(_RETRY_ATTEMPTS),
+        wait=wait_exponential(multiplier=1, min=_RETRY_WAIT_MIN, max=_RETRY_WAIT_MAX),
+        retry=retry_if_exception(_is_retryable),
+        reraise=True,
+    )
+    async def _attempt() -> tuple[str, int, int]:
+        async with asyncio.timeout(_LLM_TIMEOUT_SECONDS):
+            return await _call_llm(
+                model_id, prompt, system_prompt, max_tokens, temperature, api_key
+            )
+
+    return await _attempt()
 
 
 # ─── Heuristic validity scorer (RDAB-calibrated) ─────────────────────────────
@@ -465,15 +529,14 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
 
         call_start = time.monotonic()
         try:
-            async with asyncio.timeout(30.0):
-                content, in_tokens, out_tokens = await _call_llm(
-                    model_id=current_model,
-                    prompt=req.prompt,
-                    system_prompt=req.system_prompt,
-                    max_tokens=req.max_tokens,
-                    temperature=req.temperature,
-                    api_key=req.api_key,
-                )
+            content, in_tokens, out_tokens = await _call_llm_with_retry(
+                model_id=current_model,
+                prompt=req.prompt,
+                system_prompt=req.system_prompt,
+                max_tokens=req.max_tokens,
+                temperature=req.temperature,
+                api_key=req.api_key,
+            )
             latency_ms = (time.monotonic() - call_start) * 1000
 
             cb.record_success()
@@ -523,7 +586,10 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
             cb.record_failure()
             latency_ms = (time.monotonic() - call_start) * 1000
             proxy_requests_total.labels(model=current_model, provider=pricing.provider, status="timeout").inc()
-            logger.error(f"[{call_id}] Timeout after 30s for {current_model}")
+            logger.error(
+                f"[{call_id}] Timeout after {_LLM_TIMEOUT_SECONDS}s for {current_model} "
+                f"({_RETRY_ATTEMPTS} attempts exhausted)"
+            )
 
             if cb.state == "open":
                 await _alert_engine.check_circuit_breaker_opened(
@@ -534,7 +600,10 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
             if attempt_idx == len(models_to_try) - 1:
                 raise HTTPException(
                     status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                    detail=f"All models timed out. Last timeout on {current_model} after 30s.",
+                    detail=(
+                        f"All models timed out. Last timeout on {current_model} "
+                        f"after {_LLM_TIMEOUT_SECONDS}s × {_RETRY_ATTEMPTS} attempts."
+                    ),
                 )
             continue
 

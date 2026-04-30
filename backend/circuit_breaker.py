@@ -5,13 +5,14 @@ Prevents hammering a failing provider with retries during an outage.
 State machine: CLOSED → OPEN (on N failures) → HALF_OPEN (after timeout) → CLOSED
 
 Thread-safe via asyncio locks.
+State persists across restarts via SQLite (single-node) — see save/load_state().
 """
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 
 State = Literal["closed", "open", "half_open"]
@@ -81,3 +82,55 @@ class CircuitBreakerRegistry:
 
     def status_all(self) -> dict[str, dict]:
         return {p: cb.to_dict() for p, cb in self._breakers.items()}
+
+    def save_state(self) -> None:
+        """Persist all circuit breaker states to SQLite. Called at shutdown."""
+        try:
+            from evaluation.observability import save_runtime_state
+            snapshot: dict[str, Any] = {}
+            now_wall = time.time()
+            now_mono = time.monotonic()
+            for provider, cb in self._breakers.items():
+                last_failure_wall = (
+                    now_wall - (now_mono - cb._last_failure_time)
+                    if cb._last_failure_time > 0 else None
+                )
+                snapshot[provider] = {
+                    "state": cb._state,
+                    "failure_count": cb._failure_count,
+                    "success_count": cb._success_count,
+                    "last_failure_wall": last_failure_wall,
+                    "failure_threshold": cb.failure_threshold,
+                    "success_threshold": cb.success_threshold,
+                    "timeout_seconds": cb.timeout_seconds,
+                }
+            save_runtime_state("circuit_breakers", snapshot)
+        except Exception as exc:
+            from backend.logger import logger
+            logger.warning(f"[circuit_breaker] Failed to save state: {exc}")
+
+    def load_state(self) -> None:
+        """Restore circuit breaker states from SQLite. Called at startup."""
+        try:
+            from evaluation.observability import load_runtime_state
+            snapshot = load_runtime_state("circuit_breakers")
+            if not snapshot:
+                return
+            now_wall = time.time()
+            now_mono = time.monotonic()
+            for provider, data in snapshot.items():
+                cb = self.get(provider)
+                cb._state = data.get("state", "closed")
+                cb._failure_count = data.get("failure_count", 0)
+                cb._success_count = data.get("success_count", 0)
+                last_failure_wall = data.get("last_failure_wall")
+                if last_failure_wall is not None:
+                    elapsed_since_failure = now_wall - last_failure_wall
+                    cb._last_failure_time = now_mono - elapsed_since_failure
+                else:
+                    cb._last_failure_time = 0.0
+            from backend.logger import logger
+            logger.info(f"[circuit_breaker] Restored state for: {list(snapshot.keys())}")
+        except Exception as exc:
+            from backend.logger import logger
+            logger.warning(f"[circuit_breaker] Failed to restore state: {exc}")

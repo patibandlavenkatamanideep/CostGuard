@@ -40,7 +40,7 @@ dependencies = [
     # RealDataAgentBench — evaluation engine
     "realdataagentbench @ git+https://github.com/patibandlavenkatamanideep/RealDataAgentBench.git",
     # Additional providers supported by RDAB
-    "google-generativeai>=0.8.0",
+    # google-genai (new SDK): per-call client objects, no global state — replaces google-generativeai
     "groq>=0.11.0",
     "scipy>=1.13.0",
     "scikit-learn>=1.5.0",
@@ -53,6 +53,7 @@ dependencies = [
     # "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
     # "opentelemetry-instrumentation-fastapi>=0.48b0",
     # "opentelemetry-instrumentation-httpx>=0.48b0",
+    "google-genai>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -63,6 +64,7 @@ dev = [
     "ruff>=0.8.0",
     "mypy>=1.13.0",
     "httpx>=0.27.0",
+    "locust>=2.31.0",
 ]
 
 [project.scripts]
@@ -93,6 +95,7 @@ addopts = "--cov=backend --cov=evaluation --cov-report=term-missing"
 
 [dependency-groups]
 dev = [
+    "locust>=2.31.0",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
 ]

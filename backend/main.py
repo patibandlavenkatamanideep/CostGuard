@@ -47,7 +47,24 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning(f"Observability DB init failed: {exc}")
 
+    # Restore circuit breaker and alert engine state from previous run
+    try:
+        from backend.proxy import _circuit_registry, _alert_engine
+        _circuit_registry.load_state()
+        _alert_engine.load_state()
+    except Exception as exc:
+        logger.warning(f"Runtime state restore failed (starting fresh): {exc}")
+
     yield
+
+    # Persist state so the next process restart continues from where we stopped
+    try:
+        from backend.proxy import _circuit_registry, _alert_engine
+        _circuit_registry.save_state()
+        _alert_engine.save_state()
+        logger.info("Runtime state persisted to DB")
+    except Exception as exc:
+        logger.warning(f"Runtime state save failed: {exc}")
 
     logger.info("CostGuard API shutting down")
 

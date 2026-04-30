@@ -376,7 +376,7 @@ def _simulate_scorecard(
         "gemini-2.5-flash":           {"efficiency": 0.95},
         "llama-3.3-70b-versatile":    {"correctness": 0.82, "code_quality": 0.78},
         "claude-sonnet-4-6":          {"correctness": 0.90, "efficiency": 0.65},
-        "claude-haiku-4-5-20251001":  {"efficiency": 0.40},
+        "claude-haiku-4-5-20251001":  {},  # economy tier base (0.88) correctly reflects token efficiency
         "grok-3-mini":                {"code_quality": 0.50},  # sklearn blind spot confirmed in RDAB
     }
     for key, vals in overrides.get(pricing.model_id, {}).items():

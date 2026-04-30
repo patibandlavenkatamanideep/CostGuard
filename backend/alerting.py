@@ -349,6 +349,36 @@ class AlertEngine:
         self._recent_outcomes.append(True)
         self._consecutive_low[model_id] = 0
 
+    def save_state(self) -> None:
+        """Persist cooldown and counter state to SQLite. Called at shutdown."""
+        try:
+            from evaluation.observability import save_runtime_state
+            save_runtime_state("alert_engine", {
+                "last_fired": self._last_fired,
+                "consecutive_low": self._consecutive_low,
+                "recent_outcomes": list(self._recent_outcomes),
+            })
+        except Exception as exc:
+            logger.warning(f"[alerting] Failed to save state: {exc}")
+
+    def load_state(self) -> None:
+        """Restore cooldown and counter state from SQLite. Called at startup."""
+        try:
+            from evaluation.observability import load_runtime_state
+            data = load_runtime_state("alert_engine")
+            if not data:
+                return
+            self._last_fired = data.get("last_fired", {})
+            self._consecutive_low = data.get("consecutive_low", {})
+            outcomes = data.get("recent_outcomes", [])
+            self._recent_outcomes = collections.deque(
+                (bool(x) for x in outcomes[-_FAILURE_WINDOW:]),
+                maxlen=_FAILURE_WINDOW,
+            )
+            logger.info("[alerting] Restored alert engine state from DB")
+        except Exception as exc:
+            logger.warning(f"[alerting] Failed to restore state: {exc}")
+
     async def check_circuit_breaker_opened(
         self,
         provider: str,
