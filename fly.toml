@@ -14,8 +14,8 @@
 #   fly logs           → tail logs
 #   fly ssh console    → shell into the running container
 
-app            = "costguard"   # change to your unique app name
-primary_region = "iad"         # iad=US-East  lhr=London  sin=Singapore  nrt=Tokyo
+app            = "costguard-rdab"   # change to your unique app name (must be globally unique on Fly.io)
+primary_region = "iad"              # iad=US-East  lhr=London  sin=Singapore  nrt=Tokyo
 
 [build]
   dockerfile = "Dockerfile"

@@ -3,7 +3,8 @@ services:
     name: costguard
     env: docker
     dockerfilePath: ./Dockerfile
-    # start.sh launches FastAPI on :8000 (internal) + Streamlit on $PORT (public)
+    # start.sh: FastAPI on 127.0.0.1:9000 (internal) + Streamlit on $PORT (public)
+    # Render injects $PORT automatically — do not set it here.
     dockerCommand: bash scripts/start.sh
     plan: free
     healthCheckPath: /_stcore/health
@@ -12,10 +13,18 @@ services:
         value: production
       - key: LOG_LEVEL
         value: INFO
-      - key: API_PORT
-        value: "8000"
-      # ── Add your API keys in the Render dashboard ───────────────────────────
-      # These are optional — without them the app runs in Simulation Mode.
+      # SECRET_KEY — generate with: openssl rand -hex 32
+      # Set this in the Render dashboard (Environment tab)
+      - key: SECRET_KEY
+        sync: false
+      # SQLite path — /tmp is ephemeral on Render free tier (resets on redeploy).
+      # Upgrade to a paid Render instance + Disk to persist across deploys.
+      - key: COSTGUARD_DB_PATH
+        value: /tmp/costguard_history.db
+      - key: COSTGUARD_STATE_BACKEND
+        value: sqlite
+      # ── Provider API keys — set in Render dashboard, not here ───────────────
+      # At least one required for Live Mode. All optional for Simulation Mode.
       - key: OPENAI_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
@@ -25,4 +34,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: XAI_API_KEY
+        sync: false
+      # ── Optional alerting ────────────────────────────────────────────────────
+      - key: SLACK_WEBHOOK_URL
         sync: false
