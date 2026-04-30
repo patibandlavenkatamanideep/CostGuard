@@ -6,7 +6,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Powered by RDAB](https://img.shields.io/badge/Evaluation-RealDataAgentBench-7c3aed)](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Try%20Now%20%E2%86%92-brightgreen)](https://costguard-production-3afa.up.railway.app)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/patibandlavenkatamanideep/CostGuard)
 
 ---
 
@@ -44,9 +44,7 @@ If you need true response quality assurance, use `/evaluate` for batch benchmark
 
 ## Live Demo
 
-**[costguard-production-3afa.up.railway.app](https://costguard-production-3afa.up.railway.app)**
-
-No account. No setup. Upload a CSV or Parquet file and get a model recommendation in under 15 seconds (Simulation Mode) or 1–3 minutes (Live Mode with your API keys).
+Deploy your own instance in under 5 minutes using any platform below — or run locally with `./scripts/dev.sh`. No account required for local use.
 
 ---
 
@@ -296,18 +294,129 @@ pip install -e .
 
 ---
 
-## Deploy to Railway
+## Deploy
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/patibandlavenkatamanideep/CostGuard)
+### Environment variables (all platforms)
 
-**Required environment variables:**
+| Variable | Required | Notes |
+|---|---|---|
+| `SECRET_KEY` | Yes | `openssl rand -hex 32` |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GROQ_API_KEY` | At least one for Live Mode | Omit for Simulation Mode |
+| `COSTGUARD_DB_PATH` | Recommended | Set to a persistent volume path (see per-platform notes) |
+| `SLACK_WEBHOOK_URL` | No | Enables Slack alerting |
+| `COSTGUARD_STATE_BACKEND` | No | `sqlite` (default) or `none` |
 
-| Variable | Purpose |
-|---|---|
-| `SECRET_KEY` | Generate with `openssl rand -hex 32` |
-| `COSTGUARD_DB_PATH` | SQLite path — use a persistent volume mount |
-| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | At least one provider for Live Mode |
-| `SLACK_WEBHOOK_URL` | Optional — enables Slack alerting |
+---
+
+### Option 1 — Render (zero-config, free tier)
+
+Config is already in [`render.yaml`](render.yaml). Connect your GitHub repo in the Render dashboard and click **Deploy**.
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/patibandlavenkatamanideep/CostGuard)
+
+**Free tier caveats:** spins down after 15 min inactivity (30s cold start on next request). No persistent disk on free tier — SQLite resets on redeploy. Upgrade to a paid instance ($7/month) to add a disk.
+
+```bash
+# After deploying, add secrets in Render Dashboard → Environment
+SECRET_KEY=<openssl rand -hex 32>
+OPENAI_API_KEY=sk-...
+```
+
+---
+
+### Option 2 — Fly.io (recommended free tier — always-on + persistent storage)
+
+Config is already in [`fly.toml`](fly.toml). Fly's free allowance includes 3 always-on shared VMs and 3 GB of persistent volume storage — SQLite survives deploys and restarts.
+
+```bash
+# Install Fly CLI: https://fly.io/docs/hands-on/install-flyctl/
+fly auth login
+
+# Create app (pick a globally unique name)
+fly apps create costguard-yourname
+
+# Edit fly.toml: change app = "costguard-yourname" to match
+
+# Create persistent volume for SQLite
+fly volumes create costguard_data --region iad --size 1
+
+# Set secrets
+fly secrets set SECRET_KEY=$(openssl rand -hex 32)
+fly secrets set OPENAI_API_KEY=sk-...          # at least one provider
+
+# Deploy (uses Dockerfile automatically)
+fly deploy
+
+# Open in browser
+fly open
+```
+
+**Free tier:** 3 shared-cpu-1x VMs (256 MB RAM each), 160 GB outbound transfer/month. No sleep.
+
+---
+
+### Option 3 — Koyeb (free tier, no sleep, no CLI needed)
+
+1. Go to [koyeb.com](https://www.koyeb.com/) → **Deploy** → **GitHub**
+2. Select `patibandlavenkatamanideep/CostGuard`
+3. Builder: **Dockerfile**, Port: **8501**, Health path: `/_stcore/health`
+4. Add env vars: `SECRET_KEY`, `PORT=8501`, `API_PORT=9000`, `COSTGUARD_DB_PATH=/tmp/costguard_history.db`, plus any provider keys
+5. Click **Deploy**
+
+**Free tier:** 512 MB RAM, 0.1 vCPU, always-on (no sleep). No persistent disk — SQLite resets on redeploy.
+
+---
+
+### Option 4 — Hugging Face Spaces (free, great ML community visibility)
+
+1. Go to [huggingface.co/new-space](https://huggingface.co/new-space)
+2. Space SDK: **Docker**, Visibility: **Public**
+3. In the Space settings → **Secrets**: add `SECRET_KEY`, `OPENAI_API_KEY`, etc.
+4. Push the repo or link via GitHub integration
+
+Add this header to your Space's `README.md`:
+
+```yaml
+---
+title: CostGuard
+emoji: 🛡️
+colorFrom: purple
+colorTo: blue
+sdk: docker
+app_port: 8501
+pinned: false
+---
+```
+
+**Free tier:** 2 vCPU, 16 GB RAM (CPU Basic Space). No persistent storage on free tier.
+
+---
+
+### Option 5 — Self-host with Docker Compose
+
+```bash
+git clone https://github.com/patibandlavenkatamanideep/CostGuard.git
+cd CostGuard
+cp .env.example .env    # add SECRET_KEY and at least one provider key
+docker compose up -d    # SQLite stored in named volume costguard-data
+
+# With monitoring (Prometheus + Grafana on :3000)
+docker compose --profile monitoring up -d
+```
+
+SQLite persists in the `costguard-data` Docker named volume across restarts and image updates.
+
+---
+
+### Platform comparison
+
+| Platform | Free tier RAM | Sleep? | Persistent disk? | Config needed |
+|----------|-------------|--------|-----------------|---------------|
+| **Fly.io** | 256 MB | No | Yes (3 GB) | `fly.toml` ✅ ready |
+| **Render** | 512 MB | Yes (15 min) | No (free) | `render.yaml` ✅ ready |
+| **Koyeb** | 512 MB | No | No | Dashboard only |
+| **HF Spaces** | 16 GB | No | No (free) | README header |
+| **Self-host** | Unlimited | No | Yes | `.env` only |
 
 ---
 
@@ -339,13 +448,16 @@ costguard/
 │   └── grafana/           # Grafana dashboard + datasource provisioning
 ├── tests/
 │   ├── test_evaluation.py # Evaluation + pricing + data loader tests
-│   └── test_proxy.py      # Proxy + circuit breaker + alerting + middleware tests
+│   ├── test_proxy.py      # Proxy + CB + alerting + retry + persistence tests (73 tests)
+│   └── locustfile.py      # Load test — finds RPS ceiling (locust -f tests/locustfile.py)
 ├── scripts/
 │   ├── dev.sh
 │   └── start.sh
 ├── .dockerignore
 ├── docker-compose.yml     # Named volume + optional monitoring profile
 ├── Dockerfile             # Multi-stage build (builder + non-root runtime)
+├── fly.toml               # Fly.io deployment (always-on, persistent SQLite)
+├── render.yaml            # Render deployment (zero-config)
 └── pyproject.toml
 ```
 
