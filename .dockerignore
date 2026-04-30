@@ -1,0 +1,46 @@
+# Never bake secrets or dev state into the image
+.env
+.env.local
+.env.*.local
+
+# Git
+.git
+.gitignore
+.github
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Dev tooling
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Data / uploads (never bake user data into image)
+/data/
+*.db
+*.sqlite
+*.sqlite3
+/tmp/costguard/
+
+# Docs (not needed at runtime)
+*.md
+LICENSE
+CHANGELOG.md
+CONTRIBUTING.md
+SECURITY.md

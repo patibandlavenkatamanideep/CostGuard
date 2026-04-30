@@ -11,13 +11,32 @@ from __future__ import annotations
 
 import time
 import uuid
-from collections import defaultdict
+from collections import OrderedDict
 from typing import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.logger import logger
+
+_RATE_LIMIT_MAX_IPS = 10_000  # cap to prevent unbounded memory growth
+
+
+class _LRUBucketDict:
+    """Bounded LRU dict for per-IP token buckets. Evicts oldest when full."""
+
+    def __init__(self, maxsize: int, factory) -> None:
+        self._maxsize = maxsize
+        self._factory = factory
+        self._data: OrderedDict = OrderedDict()
+
+    def __getitem__(self, key: str) -> "_TokenBucket":
+        if key not in self._data:
+            if len(self._data) >= self._maxsize:
+                self._data.popitem(last=False)  # evict oldest
+            self._data[key] = self._factory()
+        self._data.move_to_end(key)
+        return self._data[key]
 
 
 # ─── 1. Request ID ────────────────────────────────────────────────────────────
@@ -82,14 +101,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app) -> None:
         super().__init__(app)
-        self._evaluate_buckets: dict[str, _TokenBucket] = defaultdict(
-            lambda: _TokenBucket(self._EVALUATE_CAPACITY, self._EVALUATE_CAPACITY / 60.0)
+        self._evaluate_buckets = _LRUBucketDict(
+            _RATE_LIMIT_MAX_IPS,
+            lambda: _TokenBucket(self._EVALUATE_CAPACITY, self._EVALUATE_CAPACITY / 60.0),
         )
-        self._proxy_buckets: dict[str, _TokenBucket] = defaultdict(
-            lambda: _TokenBucket(self._PROXY_CAPACITY, self._PROXY_CAPACITY / 60.0)
+        self._proxy_buckets = _LRUBucketDict(
+            _RATE_LIMIT_MAX_IPS,
+            lambda: _TokenBucket(self._PROXY_CAPACITY, self._PROXY_CAPACITY / 60.0),
         )
-        self._default_buckets: dict[str, _TokenBucket] = defaultdict(
-            lambda: _TokenBucket(self._DEFAULT_CAPACITY, self._DEFAULT_CAPACITY / 60.0)
+        self._default_buckets = _LRUBucketDict(
+            _RATE_LIMIT_MAX_IPS,
+            lambda: _TokenBucket(self._DEFAULT_CAPACITY, self._DEFAULT_CAPACITY / 60.0),
         )
 
     def _get_client_ip(self, request: Request) -> str:
