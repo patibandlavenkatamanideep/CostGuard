@@ -1,6 +1,6 @@
 # CostGuard
 
-> **LLM reliability and cost optimization proxy. Route agent calls through CostGuard to get validity scoring, cost tracking, automatic fallbacks, and alerting — without building your own evaluation infrastructure.**
+> **Open-source LLM reliability proxy. Route agent calls through CostGuard to get validity scoring, cost tracking, automatic fallbacks, and alerting — without building your own evaluation infrastructure.**
 
 [![CI/CD](https://github.com/patibandlavenkatamanideep/CostGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/patibandlavenkatamanideep/CostGuard/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
@@ -522,35 +522,35 @@ mypy backend/ evaluation/
 
 ---
 
-## Production Readiness Checklist
+## Engineering Checklist
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| LLM proxy with auto-reject + fallback | ✅ Production-Ready | `POST /proxy` |
-| Per-call timeout (30s, per-attempt) | ✅ Production-Ready | `asyncio.timeout` inside retry loop |
-| Same-model retry + exponential backoff | ✅ Production-Ready | tenacity: 3 attempts, 1–8s backoff, 429/503/connection errors |
-| Per-IP rate limiting (LRU-bounded) | ✅ Production-Ready | Token bucket, capped at 10K IPs |
-| Per-provider circuit breaker | ✅ Production-Ready | CLOSED/OPEN/HALF_OPEN state machine |
-| Circuit breaker state persistence | ✅ Production-Ready (single-node) | SQLite `runtime_state` table; survives restarts |
-| 6 alert types with cooldown | ✅ Production-Ready | Slack + generic webhook; cooldowns persist across restarts |
-| Gemini SDK (google-genai ≥ 1.0) | ✅ Production-Ready | Per-call client objects; no global state; full concurrency |
-| Prometheus metrics (13 metrics) | ✅ Production-Ready | `/metrics` endpoint |
-| Grafana dashboard | ✅ Production-Ready | Auto-provisioned in `--profile monitoring` |
-| SQLite WAL mode (observability) | ✅ Production-Ready (single-node) | Concurrent read/write safe |
-| Named Docker volume | ✅ Production-Ready | DB survives container restarts |
-| Request ID propagation | ✅ Production-Ready | `X-Request-ID` header + log correlation |
-| Security headers | ✅ Production-Ready | X-Frame-Options, X-Content-Type-Options, etc. |
-| OpenTelemetry traces | ✅ Production-Ready | Opt-in via `OTEL_EXPORTER_OTLP_ENDPOINT` |
-| Non-root Docker user | ✅ Production-Ready | UID 1001 |
-| Multi-stage Dockerfile | ✅ Production-Ready | Builder + minimal runtime |
-| `.dockerignore` | ✅ Production-Ready | Prevents `.env` from baking into image |
-| CI security scanning | ✅ Production-Ready | Bandit + Trivy + pip-audit |
-| Proxy unit tests (73 total) | ✅ Production-Ready | CB, alerting, persistence, retry, middleware, scorer |
-| Load test | ✅ Available | `locust -f tests/locustfile.py` — finds RPS ceiling |
-| LLM client connection pooling | ⚠️ Still Demo | Default-key clients cached; per-request keys get fresh clients |
-| Proxy heuristic scorer | ⚠️ Still Demo | Fast pre-filter (~1ms), not full RDAB evaluation |
-| Multi-replica CB/alert state | ⚠️ Still Demo | Requires Redis for shared state across replicas |
-| Observability store (multi-node) | ⚠️ Still Demo | SQLite is single-node only; replace with PostgreSQL + asyncpg |
+| LLM proxy with auto-reject + fallback | ✅ Complete | `POST /proxy` |
+| Per-call timeout (30s, per-attempt) | ✅ Complete | `asyncio.timeout` inside retry loop |
+| Same-model retry + exponential backoff | ✅ Complete | tenacity: 3 attempts, 1–8s backoff, 429/503/connection errors |
+| Per-IP rate limiting (LRU-bounded) | ✅ Complete | Token bucket, capped at 10K IPs |
+| Per-provider circuit breaker | ✅ Complete | CLOSED/OPEN/HALF_OPEN state machine |
+| Circuit breaker state persistence | ✅ Complete (single-node) | SQLite `runtime_state` table; survives restarts |
+| 6 alert types with cooldown | ✅ Complete | Slack + generic webhook; cooldowns persist across restarts |
+| Gemini SDK (google-genai ≥ 1.0) | ✅ Complete | Per-call client objects; no global state; full concurrency |
+| Prometheus metrics (13 metrics) | ✅ Complete | `/metrics` endpoint |
+| Grafana dashboard | ✅ Complete | Auto-provisioned in `--profile monitoring` |
+| SQLite WAL mode (observability) | ✅ Complete (single-node) | Concurrent read/write safe |
+| Named Docker volume | ✅ Complete | DB survives container restarts |
+| Request ID propagation | ✅ Complete | `X-Request-ID` header + log correlation |
+| Security headers | ✅ Complete | X-Frame-Options, X-Content-Type-Options, etc. |
+| OpenTelemetry traces | ✅ Complete | Opt-in via `OTEL_EXPORTER_OTLP_ENDPOINT` |
+| Non-root Docker user | ✅ Complete | UID 1001 |
+| Multi-stage Dockerfile | ✅ Complete | Builder + minimal runtime |
+| `.dockerignore` | ✅ Complete | Prevents `.env` from baking into image |
+| CI security scanning | ✅ Complete | Bandit + Trivy + pip-audit |
+| Proxy unit tests (73 total) | ✅ Complete | CB, alerting, persistence, retry, middleware, scorer |
+| Load test | ✅ Complete | `locust -f tests/locustfile.py` — finds RPS ceiling |
+| LLM client connection pooling | ⚠️ Known limitation | Default-key clients cached; per-request keys get fresh clients |
+| Proxy heuristic scorer | ⚠️ Known limitation | Fast pre-filter (~1ms), not full RDAB evaluation |
+| Multi-replica CB/alert state | ⚠️ Known limitation | Requires Redis for shared state across replicas |
+| Observability store (multi-node) | ⚠️ Known limitation | SQLite is single-node only; replace with PostgreSQL + asyncpg |
 
 ---
 
