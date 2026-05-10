@@ -1,6 +1,6 @@
 # CostGuard
 
-> **Open-source LLM reliability proxy. Route agent calls through CostGuard to get validity scoring, cost tracking, automatic fallbacks, and alerting — without building your own evaluation infrastructure.**
+> **Open-source LLM evaluation proxy.** Unlike LiteLLM, Helicone, or Portkey, CostGuard's reliability layer is grounded in [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) — 1,180+ empirical runs across 39 tasks and 12 models. You get RDAB-calibrated validity scoring on every proxy call, plus retries, circuit breakers, cost tracking, and alerting.
 
 [![CI/CD](https://github.com/patibandlavenkatamanideep/CostGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/patibandlavenkatamanideep/CostGuard/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
@@ -12,16 +12,18 @@
 
 ## What Is CostGuard?
 
-CostGuard is a self-hostable reliability layer for LLM-powered agents. It sits between your code and the LLM provider and gives you:
+CostGuard is a self-hostable LLM proxy with a clear differentiator: every validity score it assigns is grounded in [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench), an empirical benchmark of 1,180+ runs across 39 tasks and 12 frontier models. Most proxies gate on latency and error codes. CostGuard gates on response quality — and has the benchmark data to calibrate those gates.
 
-- **Real-time response filtering** — every LLM response is scored with a RDAB-calibrated heuristic validator before being returned. Responses below your quality threshold are rejected automatically.
-- **Automatic fallback** — on rejection, CostGuard retries with the next model in your fallback chain. No changes to your application code required.
+The headline capability is `/evaluate`: upload a dataset, get statistically grounded model recommendations with four-dimensional RDAB scorecards. The `/proxy` endpoint is the runtime delivery mechanism: a fast reliability filter that sits in your hot path.
+
+- **Dataset benchmarking** (the unique part) — powered by [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench). Upload any CSV/Parquet and get a cost-weighted model ranking grounded in real benchmark data. The key RDAB finding: every frontier model scores ≤0.25 on statistical validity even when scoring 0.83–1.00 on correctness — correct-looking output ≠ sound reasoning.
+- **Real-time response filtering** — every `/proxy` call is scored with a RDAB-calibrated heuristic validator. Responses below your threshold are rejected automatically.
+- **Automatic fallback** — on rejection, CostGuard retries with the next model in your fallback chain.
 - **Exact cost tracking** — per-call token accounting at $0.000001 precision across 12 models and 5 providers.
-- **Dataset benchmarking** — powered by [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) (1,180+ evaluation runs, 39 tasks, 12 models). Upload any CSV/Parquet and get a statistically grounded model recommendation.
 - **Alerting** — validity drops, cost spikes, high failure rates, circuit breaker events, and consecutive rejections routed to Slack or any webhook.
-- **Per-provider circuit breakers** — automatically stops hammering a failing provider during an outage.
+- **Per-provider circuit breakers** — stops hammering a failing provider during an outage; state persists across restarts.
 
-**Who this is for:** teams running LangGraph, CrewAI, or custom LLM agents who need reliability guarantees and cost control without building their own evaluation infrastructure.
+**Who this is for:** teams running LangGraph, CrewAI, or custom LLM agents who want reliability guarantees backed by actual benchmark data, not just latency-based health checks.
 
 ---
 
@@ -34,11 +36,13 @@ CostGuard has **two validity modes** — understanding the difference matters:
 | **Heuristic** | `POST /proxy` | RDAB-calibrated keyword scorer (~1ms) | ~1ms overhead |
 | **Full RDAB** | `POST /evaluate` | Actual RDAB agent evaluation with dataset-grounded questions | 15s–3min |
 
-The `/proxy` endpoint uses a fast heuristic scorer: it checks for statistical markers (p-values, confidence intervals, uncertainty quantification) and penalizes failure-mode phrases ("I cannot", "I don't know", error tracebacks). It is **not** a full LLM evaluation — it's a practical pre-filter you can run synchronously on every call without adding meaningful latency.
+The `/proxy` endpoint uses a fast heuristic scorer: it rewards statistical markers (p-values, confidence intervals, uncertainty quantification) and penalizes failure-mode phrases ("I cannot", "I don't know", error tracebacks, empty outputs). It is **not** a full LLM evaluation — it's a practical pre-filter you can run synchronously on every call without adding meaningful latency.
 
-The `/evaluate` endpoint runs actual [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) evaluations grounded in your uploaded dataset, returning four-dimensional RDAB scorecards from 1,180+ benchmark runs across 12 models.
+**What it catches:** broken responses, refusals, empty output, obvious errors. **What it misses:** fluent, confident, statistically unsound analysis — the most common failure mode in RDAB, and the one that matters most. A model generating plausible-sounding confidence intervals with the wrong methodology will typically pass the heuristic filter at any threshold.
 
-If you need true response quality assurance, use `/evaluate` for batch benchmarking and `/proxy` as a fast sanity filter in your hot path.
+The `/evaluate` endpoint runs actual [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) evaluations grounded in your uploaded dataset, returning four-dimensional RDAB scorecards from 1,180+ benchmark runs across 12 models. This is the right tool for catching the statistical validity gap.
+
+If you need true response quality assurance: use `/evaluate` for batch benchmarking and use `/proxy` as a fast sanity filter in your hot path. They solve different problems.
 
 ---
 
@@ -116,9 +120,9 @@ Your Agent / LangGraph / CrewAI
 
 ---
 
-## The Proxy — Drop-In LLM Guard
+## The Proxy — HTTP Guard Layer
 
-Replace your direct LLM call with a POST to `/proxy`.
+CostGuard is an **HTTP proxy**, not an SDK wrapper. Using it requires replacing direct LLM SDK calls with HTTP calls to the `/proxy` endpoint — typically a one-site change if your agent centralizes its LLM calls. Cross-provider tool-call format translation is not handled: if your agent uses function calling, falling back mid-session from Claude to GPT-4.1 will produce format mismatches. `/proxy` fallback is designed for text completion tasks.
 
 ### Before (no reliability layer)
 ```python
@@ -145,6 +149,8 @@ print(response["validity_score"])    # heuristic scorecard
 print(response["cost_usd"])          # exact cost for this call
 print(response["fallback_used"])     # True if primary was rejected
 ```
+
+> **Threshold guidance:** `reject_threshold: 0.30` is a conservative starting point — at this level the filter mainly catches genuinely broken or evasive responses (empty output, tracebacks, "I cannot help"). It does **not** reliably catch fluent-but-statistically-unsound responses, which is the dominant failure mode in RDAB. There is no published calibration plot. If you need statistical validity enforcement, use `/evaluate` for batch benchmarking and treat `/proxy` as a fast sanity filter. Tune `reject_threshold` against a sample of your own model outputs before relying on it as a quality gate.
 
 ### Proxy Response Schema
 ```json
@@ -516,7 +522,9 @@ mypy backend/ evaluation/
 
 ## Known Limitations
 
-- **Proxy validity scoring is heuristic-only** — the fast path uses keyword matching, not a real LLM evaluation. Use `/evaluate` for statistical validity assessment.
+- **Proxy validity scoring is heuristic-only** — the `/proxy` fast path rewards statistical keywords and penalizes failure phrases. It does not catch fluent-but-statistically-unsound responses. Use `/evaluate` for real quality assessment.
+- **`reject_threshold` is uncalibrated** — 0.30 is a reasonable default for catching broken responses; it is not empirically derived from a precision/recall curve. Calibrate to your workload before treating it as a quality gate.
+- **Tool-call format is not translated across providers** — CostGuard passes your prompt as-is to each provider. Fallback from Claude to GPT-4.1 or Gemini in an agent loop using function calling will produce format mismatches. `/proxy` fallback works reliably for text completion tasks only.
 - **Rate limit state is in-memory** — IP-based rate limit buckets reset on server restart. Fine for most deployments.
 - **SQLite for single-node persistence** — appropriate for self-hosted single-node deployments. Circuit breaker and alerting state survives process restarts via the `runtime_state` SQLite table. For multi-node or high-throughput deployments, migrate the state store to Redis and replace `observability.py` with PostgreSQL + asyncpg connection pool. Set `COSTGUARD_STATE_BACKEND=none` to disable persistence entirely.
 
