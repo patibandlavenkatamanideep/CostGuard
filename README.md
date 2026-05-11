@@ -1,6 +1,6 @@
 # CostGuard
 
-> **Open-source LLM evaluation proxy.** Unlike LiteLLM, Helicone, or Portkey, CostGuard's reliability layer is grounded in [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) — 1,180+ empirical runs across 39 tasks and 12 models. You get RDAB-calibrated validity scoring on every proxy call, plus retries, circuit breakers, cost tracking, and alerting.
+> **Open-source LLM evaluation proxy.** Unlike LiteLLM, Helicone, or Portkey, CostGuard's reliability layer is grounded in [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) — 1,412+ empirical runs across 39 tasks and 12 models. You get RDAB-calibrated validity scoring on every proxy call, plus retries, circuit breakers, cost tracking, and alerting.
 >
 > CostGuard is the runtime layer of a three-project evaluation stack: [RDAB](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) (benchmark methodology) → CostGuard (runtime enforcement) → [Tether](https://github.com/patibandlavenkatamanideep/Tether) (trace capture). See [How This Fits With RDAB and Tether](#how-this-fits-with-rdab-and-tether) for the full architecture.
 
@@ -14,7 +14,7 @@
 
 ## What Is CostGuard?
 
-CostGuard is a self-hostable LLM proxy with a clear differentiator: every validity score it assigns is grounded in [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench), an empirical benchmark of 1,180+ runs across 39 tasks and 12 frontier models. Most proxies gate on latency and error codes. CostGuard gates on response quality — and has the benchmark data to calibrate those gates.
+CostGuard is a self-hostable LLM proxy with a clear differentiator: every validity score it assigns is grounded in [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench), an empirical benchmark of 1,412+ runs across 39 tasks and 12 frontier models. Most proxies gate on latency and error codes. CostGuard gates on response quality — and has the benchmark data to calibrate those gates.
 
 The headline capability is `/evaluate`: upload a dataset, get statistically grounded model recommendations with four-dimensional RDAB scorecards. The `/proxy` endpoint is the runtime delivery mechanism: a fast reliability filter that sits in your hot path.
 
@@ -69,7 +69,7 @@ The `/proxy` endpoint uses a fast heuristic scorer: it rewards statistical marke
 
 **What it catches:** broken responses, refusals, empty output, obvious errors. **What it misses:** fluent, confident, statistically unsound analysis — the most common failure mode in RDAB, and the one that matters most. A model generating plausible-sounding confidence intervals with the wrong methodology will typically pass the heuristic filter at any threshold.
 
-The `/evaluate` endpoint runs actual [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) evaluations grounded in your uploaded dataset, returning four-dimensional RDAB scorecards from 1,180+ benchmark runs across 12 models. This is the right tool for catching the statistical validity gap.
+The `/evaluate` endpoint runs actual [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) evaluations grounded in your uploaded dataset, returning four-dimensional RDAB scorecards from 1,412+ benchmark runs across 12 models. This is the right tool for catching the statistical validity gap.
 
 If you need true response quality assurance: use `/evaluate` for batch benchmarking and use `/proxy` as a fast sanity filter in your hot path. They solve different problems.
 
@@ -217,7 +217,7 @@ print(response["fallback_used"])     # True if primary was rejected
 Upload any CSV or Parquet file. CostGuard generates dataset-grounded questions, runs them through all available models using RealDataAgentBench, and returns a ranked recommendation with exact cost estimates.
 
 **Two modes:**
-- **Simulation mode** (no API keys): returns calibrated scores from 1,180+ RDAB benchmark runs. Deterministic — same file always produces the same ranking.
+- **Simulation mode** (no API keys): returns calibrated scores from 1,412+ RDAB benchmark runs. Deterministic — same file always produces the same ranking.
 - **Live mode** (with API keys): runs real RDAB agent evaluations against your actual dataset.
 
 ```bash
@@ -273,7 +273,7 @@ Prometheus `/metrics` endpoint with Grafana dashboard included.
 
 ## RDAB Scoring Methodology
 
-CostGuard uses [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) — **1,180+ evaluation runs across 39 tasks and 12 models** — for the `/evaluate` endpoint.
+CostGuard uses [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) — **1,412+ evaluation runs across 39 tasks and 12 models** — for the `/evaluate` endpoint.
 
 | Dimension | Weight | What It Measures |
 |-----------|--------|-----------------|
@@ -282,7 +282,7 @@ CostGuard uses [RealDataAgentBench](https://github.com/patibandlavenkatamanideep
 | **Efficiency** | 15% | Token + step budget adherence |
 | **Stat Validity** | 15% | Reports p-values, confidence intervals, avoids overconfident claims |
 
-**Key RDAB Benchmark Findings (1,180+ runs · 39 tasks · 12 models):**
+**Key RDAB Benchmark Findings (1,412+ runs · 39 tasks · 12 models):**
 - **GPT-4.1** = top composite score at $0.013/task — best quality-per-dollar
 - **Gemini 2.5 Flash** = cheapest at $0.0015/task; only 20.6% below top score
 - **Stat validity gap**: model average 55.8% vs human expert baseline 81.3%
