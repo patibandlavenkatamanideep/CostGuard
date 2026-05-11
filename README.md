@@ -1,6 +1,8 @@
 # CostGuard
 
 > **Open-source LLM evaluation proxy.** Unlike LiteLLM, Helicone, or Portkey, CostGuard's reliability layer is grounded in [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) — 1,180+ empirical runs across 39 tasks and 12 models. You get RDAB-calibrated validity scoring on every proxy call, plus retries, circuit breakers, cost tracking, and alerting.
+>
+> CostGuard is the runtime layer of a three-project evaluation stack: [RDAB](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) (benchmark methodology) → CostGuard (runtime enforcement) → [Tether](https://github.com/patibandlavenkatamanideep/Tether) (trace capture). See [How This Fits With RDAB and Tether](#how-this-fits-with-rdab-and-tether) for the full architecture.
 
 [![CI/CD](https://github.com/patibandlavenkatamanideep/CostGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/patibandlavenkatamanideep/CostGuard/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
@@ -24,6 +26,33 @@ The headline capability is `/evaluate`: upload a dataset, get statistically grou
 - **Per-provider circuit breakers** — stops hammering a failing provider during an outage; state persists across restarts.
 
 **Who this is for:** teams running LangGraph, CrewAI, or custom LLM agents who want reliability guarantees backed by actual benchmark data, not just latency-based health checks.
+
+---
+
+## How This Fits With RDAB and Tether
+
+CostGuard is the runtime layer of a three-project evaluation stack. Each project has a distinct job:
+
+- **[RealDataAgentBench (RDAB)](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)** — the benchmark methodology. 39 tasks, 4-dimensional scoring (correctness, code quality, efficiency, statistical validity), 1,412+ runs. Produces the empirical scorecards that CostGuard uses.
+- **CostGuard (this repo)** — the runtime enforcement layer. Applies RDAB-calibrated scoring in the `/proxy` hot path, runs full RDAB evaluations via `/evaluate`, and adds circuit breakers, alerting, and Prometheus observability.
+- **[Tether](https://github.com/patibandlavenkatamanideep/Tether)** — the trace capture layer. Wraps OpenAI/Anthropic clients and persists every production call to SQLite. Replay-based evaluation against real production traffic is planned but not yet implemented.
+
+```
+Production agent traffic
+        │
+        ▼
+  ┌──────────┐   captures every call   ┌──────────────────────┐
+  │  Tether  │ ──────────────────────► │ SQLite trace store   │
+  └──────────┘                         └──────────┬───────────┘
+                                                   │ replay (planned)
+                                                   ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │  CostGuard /evaluate  →  RDAB 4-dim scorecards  →  ranked  │
+  │  model recommendation with cost-weighted composite score    │
+  └─────────────────────────────────────────────────────────────┘
+```
+
+Together, the stack enables something no single repo does alone: replay-based cost-routing recommendations with RDAB statistical confidence intervals against your actual production traffic — not synthetic benchmarks.
 
 ---
 
