@@ -462,7 +462,7 @@ st.markdown("""
   </p>
   <div class="hero-pills">
     <span class="hero-pill">12 RDAB-Benchmarked · 5 Providers</span>
-    <span class="hero-pill">1,180+ RDAB Benchmark Runs</span>
+    <span class="hero-pill">1,412+ RDAB Benchmark Runs</span>
     <span class="hero-pill">Real-Time Proxy + Auto-Reject</span>
     <span class="hero-pill">Simulation — No API Keys Needed</span>
     <span class="hero-pill">Self-host with Docker</span>
@@ -662,7 +662,7 @@ if result := st.session_state.get("result"):
         "citing p-values, confidence intervals, and avoiding overconfident claims. "
         "All 12 models average **55.8%** here — versus a human expert baseline of **81.3%** "
         "on the same 5 tasks. That 25-point gap is a real model capability difference, "
-        "confirmed across 1,180+ runs in the RDAB benchmark: "
+        "confirmed across 1,412+ runs in the RDAB benchmark: "
         "LLMs compute accurately but rarely add statistical rigour unprompted. "
         "It does **not** affect the model's ability to answer your data questions correctly — "
         "and it's exactly the kind of gap a cost-optimisation tool should surface.",
@@ -968,7 +968,7 @@ st.markdown("""
   <div class="cs-eyebrow">Real Case Study · CostGuard on CostGuard</div>
   <div class="cs-title">GPT-4.1 over GPT-5 — same quality, 87% cheaper</div>
   <div class="cs-body">
-    We ran <strong>1,180+ RDAB evaluations</strong> across 39 tasks and 12 models — the same benchmark
+    We ran <strong>1,412+ RDAB evaluations</strong> across 39 tasks and 12 models — the same benchmark
     that powers every recommendation in this tool. CostGuard recommended <strong>GPT-4.1</strong> over <strong>GPT-5</strong>
     for structured data analysis. GPT-4.1 scored <strong>88% RDAB</strong> (vs 79% for GPT-5)
     and cost <strong>$0.0140 per run</strong> versus <strong>$0.1053 for GPT-5</strong>.<br><br>
@@ -978,7 +978,7 @@ st.markdown("""
   </div>
   <div class="cs-stats">
     <div class="cs-stat">
-      <div class="cs-stat-val">1,180+</div>
+      <div class="cs-stat-val">1,412+</div>
       <div class="cs-stat-lbl">RDAB evaluation runs</div>
     </div>
     <div class="cs-stat">
