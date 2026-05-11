@@ -75,9 +75,9 @@ If you need true response quality assurance: use `/evaluate` for batch benchmark
 
 ---
 
-## Live Demo
+## Run It Yourself
 
-Deploy your own instance in under 5 minutes using any platform below — or run locally with `./scripts/dev.sh`. No account required for local use.
+CostGuard is self-hosted. Run it locally with `./scripts/dev.sh` in under a minute, or deploy to your own infrastructure using any platform below. No hosted demo — your data stays on your machine.
 
 ---
 
@@ -597,7 +597,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Security
 
-See [SECURITY.md](SECURITY.md). Report vulnerabilities to security@costguard.dev.
+See [SECURITY.md](SECURITY.md). Report vulnerabilities via [GitHub Security Advisories](https://github.com/patibandlavenkatamanideep/CostGuard/security/advisories/new) — do not open public issues.
 
 ## License
 

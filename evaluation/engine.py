@@ -323,8 +323,8 @@ def get_simulation_disclaimer() -> str:
     return (
         "SIMULATION MODE — scores are NOT based on your uploaded data.\n\n"
         "What these scores represent:\n"
-        "  • Baseline values are drawn from the RDAB benchmark leaderboard "
-        "(1,412+ runs · 39 tasks · 12 models, April 2026 release), not from "
+        "  • Baseline values are drawn from the RealDataAgentBench leaderboard "
+        "(1,412+ runs across 12 models and 39 tasks), not from "
         "live inference on your specific file.\n"
         "  • A dataset-specific jitter of up to ±3.5% is applied by hashing "
         "your file's row count, column count, and column names. This makes "

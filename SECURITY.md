@@ -8,9 +8,7 @@
 
 ## Reporting a Vulnerability
 
-Please **do not** open a public GitHub issue for security vulnerabilities.
-
-Email: **security@costguard.dev**
+To report a security vulnerability, please open a private security advisory at https://github.com/patibandlavenkatamanideep/CostGuard/security/advisories/new. Do not file public GitHub issues for security-sensitive reports.
 
 We will respond within 48 hours and aim to release a fix within 7 days of confirmation.
 
