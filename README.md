@@ -35,7 +35,7 @@ CostGuard is the runtime layer of a three-project evaluation stack. Each project
 
 - **[RealDataAgentBench (RDAB)](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)** — the benchmark methodology. 39 tasks, 4-dimensional scoring (correctness, code quality, efficiency, statistical validity), 1,412+ runs. Produces the empirical scorecards that CostGuard uses.
 - **CostGuard (this repo)** — the runtime enforcement layer. Applies RDAB-calibrated scoring in the `/proxy` hot path, runs full RDAB evaluations via `/evaluate`, and adds circuit breakers, alerting, and Prometheus observability.
-- **[Tether](https://github.com/patibandlavenkatamanideep/Tether)** — the trace capture layer (separate repo, integration planned). Wraps OpenAI/Anthropic clients and persists every production call to SQLite. Replay-based evaluation of Tether traces against RDAB scorecards is not yet implemented.
+- **[Tether](https://github.com/patibandlavenkatamanideep/Tether)** — the trace capture layer (separate repo). Wraps OpenAI/Anthropic clients and persists every production call to SQLite. CostGuard's `POST /replay` endpoint reads those traces directly and replays them against any alternate model, returning RDAB quality deltas with a 95% bootstrap CI.
 
 ```
 Production agent traffic
@@ -44,11 +44,11 @@ Production agent traffic
   ┌──────────┐   captures every call   ┌──────────────────────┐
   │  Tether  │ ──────────────────────► │ SQLite trace store   │
   └──────────┘                         └──────────┬───────────┘
-                                                   │ replay (planned)
+                                                   │ POST /replay  ← live
                                                    ▼
   ┌─────────────────────────────────────────────────────────────┐
-  │  CostGuard /evaluate  →  RDAB 4-dim scorecards  →  ranked  │
-  │  model recommendation with cost-weighted composite score    │
+  │  CostGuard /replay  →  RDAB quality delta  →  bootstrap CI │
+  │  cost savings estimate against any alternate model          │
   └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -474,6 +474,7 @@ costguard/
 │   ├── observability.py   # SQLite logging + drift detection (WAL mode)
 │   ├── data_loader.py     # CSV/Parquet ingestion (multi-encoding robust)
 │   ├── pricing.py         # 12-model pricing catalogue
+│   ├── tether_reader.py   # Read-only Tether SQLite reader (zero Tether dependency)
 │   ├── question_generator.py
 │   └── token_counter.py
 ├── frontend/
@@ -486,6 +487,7 @@ costguard/
 │   ├── test_proxy.py      # Proxy + CB + alerting + retry + persistence tests (73 tests)
 │   └── locustfile.py      # Load test — finds RPS ceiling (locust -f tests/locustfile.py)
 ├── scripts/
+│   ├── demo_replay.py     # End-to-end Tether→CostGuard demo (25 calls, prints Exhibit A)
 │   ├── dev.sh
 │   └── start.sh
 ├── .dockerignore
@@ -520,6 +522,37 @@ curl -X POST http://localhost:8000/evaluate \
   -F "file=@my_data.csv" \
   -F "task_description=Analyze churn patterns"
 ```
+
+### POST `/replay` — Replay a Tether run against an alternate model
+```bash
+curl -X POST http://localhost:8000/replay \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tether_db_path": "/tmp/demo_tether.db",
+    "run_id": "<uuid from TetheredOpenAI.run_id>",
+    "alternate_model": "gpt-4.1-mini",
+    "n_bootstrap_samples": 1000
+  }'
+```
+
+Response:
+```json
+{
+  "primary_model": "gpt-4o-mini",
+  "alternate_model": "gpt-4.1-mini",
+  "n_calls": 25,
+  "primary_mean_score": 0.6240,
+  "alternate_mean_score": 0.6180,
+  "delta": -0.0060,
+  "ci_low": -0.0312,
+  "ci_high": 0.0192,
+  "primary_cost_usd": 0.00048312,
+  "alternate_cost_usd": 0.00031205,
+  "savings_per_call_usd": 0.00000684
+}
+```
+
+`delta = alternate_mean_score − primary_mean_score`. A CI that straddles 0 means the quality difference is not statistically significant. `savings_per_call_usd > 0` means the alternate model is cheaper.
 
 ### GET `/health` — Deep health check
 ```bash
@@ -582,7 +615,9 @@ mypy backend/ evaluation/
 | Multi-stage Dockerfile | ✅ Complete | Builder + minimal runtime |
 | `.dockerignore` | ✅ Complete | Prevents `.env` from baking into image |
 | CI security scanning | ✅ Complete | Bandit + Trivy + pip-audit |
+| Tether replay (`POST /replay`) | ✅ Complete | Reads Tether SQLite, replays against alternate model, 95% bootstrap CI |
 | Proxy unit tests (73 total) | ✅ Complete | CB, alerting, persistence, retry, middleware, scorer |
+| Replay unit tests (17 total) | ✅ Complete | tether_reader (5), bootstrap CI (5), endpoint (7) |
 | Load test | ✅ Complete | `locust -f tests/locustfile.py` — finds RPS ceiling |
 | LLM client connection pooling | ⚠️ Known limitation | Default-key clients cached; per-request keys get fresh clients |
 | Proxy heuristic scorer | ⚠️ Known limitation | Fast pre-filter (~1ms), not full RDAB evaluation |
