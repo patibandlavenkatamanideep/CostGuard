@@ -130,6 +130,9 @@ async def generic_error_handler(request: Request, exc: Exception) -> JSONRespons
 from backend.proxy import router as proxy_router  # noqa: E402
 app.include_router(proxy_router)
 
+from backend.replay import router as replay_router  # noqa: E402
+app.include_router(replay_router)
+
 
 # ─── Routes ──────────────────────────────────────────────────────────────────
 
