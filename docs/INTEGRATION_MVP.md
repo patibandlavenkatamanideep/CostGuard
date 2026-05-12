@@ -118,23 +118,30 @@ POST /replay
       │
       ▼
 2. Open Tether SQLite (read-only, sqlite3.connect with uri=True)
-   SELECT prompt, response, model, input_tokens, output_tokens
+   SELECT inputs, outputs, model, input_tokens, output_tokens, cost_usd
    FROM   steps
    WHERE  run_id = ?
-   ORDER  BY step_index ASC
+     AND  kind   = 'llm_call'
+     AND  outputs IS NOT NULL
+   ORDER  BY sequence_number ASC
       │
       ▼
-3. Filter out steps where prompt is NULL or empty → n_calls
+3. For each row, extract:
+     prompt   = json.loads(inputs)["messages"]          # list of message dicts
+     response = json.loads(outputs)["choices"][0]["message"]["content"]
+   Filter out rows where prompt is empty → n_calls
       │
       ▼
 4. For each step:
-   a. Score original response with _score_response_fast(prompt, response)
+   a. Format prompt as a single string for the scorer:
+        prompt_text = " ".join(m["content"] for m in messages if m.get("content"))
+   b. Score original response with _score_response_fast(prompt_text, response)
       → primary_score[i]
-   b. Call alternate model via _call_llm() with same prompt
+   c. Call alternate model via _call_llm() with messages list as-is
       (30 s timeout, no retry in MVP — keeps scope tight)
-   c. Score alternate response with _score_response_fast(prompt, alt_response)
+   d. Score alternate response with _score_response_fast(prompt_text, alt_response)
       → alternate_score[i]
-   d. Accumulate token counts for cost calculation
+   e. Accumulate token counts for cost calculation
       │
       ▼
 5. Bootstrap CI:
@@ -151,30 +158,53 @@ POST /replay
 
 ---
 
-## Tether Schema Assumption
+## Tether Schema (verified 2026-05-12)
 
-The MVP assumes Tether's `steps` table has at least these columns:
+Verified against `tether/core/storage.py` and `tether/core/models.py` in
+https://github.com/patibandlavenkatamanideep/Tether.
 
 ```sql
-steps (
-    run_id       TEXT,
-    step_index   INTEGER,
-    model        TEXT,
-    prompt       TEXT,
-    response     TEXT,
-    input_tokens  INTEGER,   -- may be NULL
-    output_tokens INTEGER    -- may be NULL
-)
+CREATE TABLE IF NOT EXISTS steps (
+    id              TEXT PRIMARY KEY,
+    run_id          TEXT NOT NULL REFERENCES runs(id),
+    sequence_number INTEGER NOT NULL,
+    kind            TEXT NOT NULL,        -- filter: kind = 'llm_call'
+    provider        TEXT,                 -- nullable
+    model           TEXT,                 -- nullable
+    inputs          TEXT NOT NULL DEFAULT '{}',   -- JSON: full request payload
+    outputs         TEXT,                 -- JSON: full response payload; NULL on failure
+    input_tokens    INTEGER,              -- nullable
+    output_tokens   INTEGER,              -- nullable
+    cost_usd        TEXT,                 -- Decimal stored as string; nullable
+    latency_ms      REAL,                 -- nullable
+    error           TEXT,                 -- JSON; NULL on success
+    created_at      TEXT NOT NULL,
+    completed_at    TEXT
+);
 ```
 
-If `input_tokens` / `output_tokens` are NULL, fall back to
-`evaluation/token_counter.py` for cost estimation.  
-If the `model` column is inconsistent across steps in a run, use the value from
-the first step as `primary_model`.
+**Three things the original spec got wrong — corrected here:**
 
-**This assumption must be verified against the actual Tether repo before
-implementation starts.** If the schema differs, update this section before
-writing any code.
+1. **No `prompt` / `response` columns.** The prompt lives inside `inputs` as a
+   JSON-encoded OpenAI request dict (`inputs["messages"]`). The response lives
+   inside `outputs` as a JSON-encoded OpenAI response dict
+   (`outputs["choices"][0]["message"]["content"]`). Both must be parsed with
+   `json.loads()`.
+
+2. **No `step_index` column.** The ordering column is `sequence_number`.
+
+3. **Must filter by `kind = 'llm_call'`.** Steps can be other kinds
+   (checkpoints, tool calls, failures). Only `kind = 'llm_call'` steps have
+   meaningful `inputs`/`outputs` for replay.
+
+**Additional notes:**
+- `cost_usd` is TEXT (Decimal string). Cast with `Decimal(row["cost_usd"])` if
+  present; otherwise estimate via `evaluation/token_counter.py`.
+- `run_id` in `steps` matches the `id` column in the `runs` table — both are
+  UUID strings stored as TEXT.
+- Use the `model` value from the first non-NULL step as `primary_model`.
+- Steps where `outputs` is NULL (failed calls) are skipped — they have no
+  response to score.
 
 ---
 
@@ -203,8 +233,10 @@ Minimum test cases to ship:
 6. **Bootstrap CI contains 0** — assert `ci_low <= 0 <= ci_high` when scores are identical.
 7. **Cost calculation** — assert `savings_per_call_usd == (primary_cost_usd − alternate_cost_usd) / n_calls`.
 
-Tests use an in-memory SQLite DB to avoid any dependency on a real Tether
-installation.
+Tests use an in-memory SQLite DB seeded with the verified Tether schema
+(columns: `id`, `run_id`, `sequence_number`, `kind`, `model`, `inputs`,
+`outputs`, `input_tokens`, `output_tokens`, `cost_usd`, `created_at`).
+No dependency on a real Tether installation.
 
 ---
 
