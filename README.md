@@ -35,7 +35,7 @@ CostGuard is the runtime layer of a three-project evaluation stack. Each project
 
 - **[RealDataAgentBench (RDAB)](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)** — the benchmark methodology. 39 tasks, 4-dimensional scoring (correctness, code quality, efficiency, statistical validity), 1,412+ runs. Produces the empirical scorecards that CostGuard uses.
 - **CostGuard (this repo)** — the runtime enforcement layer. Applies RDAB-calibrated scoring in the `/proxy` hot path, runs full RDAB evaluations via `/evaluate`, and adds circuit breakers, alerting, and Prometheus observability.
-- **[Tether](https://github.com/patibandlavenkatamanideep/Tether)** — the trace capture layer. Wraps OpenAI/Anthropic clients and persists every production call to SQLite. Replay-based evaluation against real production traffic is planned but not yet implemented.
+- **[Tether](https://github.com/patibandlavenkatamanideep/Tether)** — the trace capture layer (separate repo, integration planned). Wraps OpenAI/Anthropic clients and persists every production call to SQLite. Replay-based evaluation of Tether traces against RDAB scorecards is not yet implemented.
 
 ```
 Production agent traffic
