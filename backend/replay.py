@@ -12,18 +12,19 @@ See docs/INTEGRATION_MVP.md for the full spec.
 from __future__ import annotations
 
 import contextlib
-import json
-import random
 import sqlite3
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from statistics import mean
 
+import numpy as np
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
+from scipy import stats
 
 from backend.logger import logger
 from backend.proxy import _call_llm, _score_response_fast
+from evaluation.tether_reader import TetherStep, iter_steps_for_run
 
 router = APIRouter(prefix="/replay", tags=["Replay"])
 
@@ -53,52 +54,17 @@ class ReplayResponse(BaseModel):
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-def _read_steps(db_path: str, run_id: str) -> list[sqlite3.Row]:
-    """Open Tether DB read-only and return llm_call steps for the run."""
-    uri = f"file:{db_path}?mode=ro"
-    try:
-        conn = sqlite3.connect(uri, uri=True, timeout=10)
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """
-            SELECT inputs, outputs, model, input_tokens, output_tokens, cost_usd
-            FROM   steps
-            WHERE  run_id  = ?
-              AND  kind    = 'llm_call'
-              AND  outputs IS NOT NULL
-            ORDER  BY sequence_number ASC
-            """,
-            (run_id,),
-        ).fetchall()
-        conn.close()
-        return rows
-    except sqlite3.OperationalError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot read Tether database: {exc}",
-        ) from exc
+def _parse_step(ts: TetherStep) -> dict | None:
+    """Extract prompt, system_prompt, and response text from a TetherStep.
 
-
-def _parse_step(row: sqlite3.Row) -> dict | None:
+    Returns None if the step is unusable (empty prompt or malformed outputs).
     """
-    Extract prompt, system_prompt, and response text from a Tether step row.
-    Returns None if the row is unusable (malformed JSON, empty prompt).
-    """
-    try:
-        inputs_dict = json.loads(row["inputs"])
-        outputs_dict = json.loads(row["outputs"])
-    except (json.JSONDecodeError, TypeError):
-        return None
+    messages: list[dict] = ts.inputs.get("messages", [])
 
-    messages: list[dict] = inputs_dict.get("messages", [])
-
-    # Extract system prompt (first system message, if any)
     system_prompt = next(
         (m["content"] for m in messages if m.get("role") == "system" and m.get("content")),
         None,
     )
-
-    # Build user prompt from the last user message (what the model was actually answering)
     user_prompt = next(
         (m["content"] for m in reversed(messages) if m.get("role") == "user" and m.get("content")),
         None,
@@ -106,9 +72,10 @@ def _parse_step(row: sqlite3.Row) -> dict | None:
     if not user_prompt or not user_prompt.strip():
         return None
 
-    # Extract response text from OpenAI-format outputs
+    if ts.outputs is None:
+        return None
     try:
-        response_text = outputs_dict["choices"][0]["message"]["content"] or ""
+        response_text = ts.outputs["choices"][0]["message"]["content"] or ""
     except (KeyError, IndexError, TypeError):
         return None
 
@@ -116,10 +83,10 @@ def _parse_step(row: sqlite3.Row) -> dict | None:
         "prompt": user_prompt,
         "system_prompt": system_prompt,
         "response": response_text,
-        "input_tokens": row["input_tokens"],
-        "output_tokens": row["output_tokens"],
-        "cost_usd": row["cost_usd"],
-        "model": row["model"],
+        "input_tokens": ts.input_tokens,
+        "output_tokens": ts.output_tokens,
+        "cost_usd": ts.cost_usd,
+        "model": ts.model,
     }
 
 
@@ -128,15 +95,34 @@ def _bootstrap_ci(
     n_samples: int,
     seed: int = 42,
 ) -> tuple[float, float]:
-    """95% bootstrap CI on the mean of deltas. Fixed seed for reproducibility."""
-    rng = random.Random(seed)
-    boot_means = sorted(
-        mean(rng.choices(deltas, k=len(deltas)))
-        for _ in range(n_samples)
+    """95% bootstrap CI on the mean delta using scipy.stats.bootstrap.
+
+    Uses the percentile method with a fixed seed for reproducibility.
+
+    Args:
+        deltas: Per-call quality deltas (alternate_score - primary_score).
+        n_samples: Number of bootstrap resamples (100–10,000).
+        seed: Random seed for reproducibility.
+
+    Returns:
+        (ci_low, ci_high) — 2.5th and 97.5th percentiles of the bootstrap
+        distribution of the mean.
+    """
+    arr = np.array(deltas, dtype=float)
+    # scipy requires ≥ 2 samples for a meaningful CI; handle the edge case.
+    if len(arr) < 2:
+        v = float(arr[0]) if len(arr) == 1 else 0.0
+        return v, v
+
+    result = stats.bootstrap(
+        (arr,),
+        statistic=np.mean,
+        n_resamples=n_samples,
+        confidence_level=0.95,
+        random_state=seed,
+        method="percentile",
     )
-    lo = boot_means[int(0.025 * n_samples)]
-    hi = boot_means[min(int(0.975 * n_samples), n_samples - 1)]
-    return lo, hi
+    return float(result.confidence_interval.low), float(result.confidence_interval.high)
 
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────
@@ -164,16 +150,28 @@ async def replay(req: ReplayRequest) -> ReplayResponse:
             detail=f"Unknown alternate_model '{req.alternate_model}'. Check GET /models.",
         )
 
-    # ── 2. Read steps from Tether ─────────────────────────────────────────────
-    raw_rows = _read_steps(req.tether_db_path, req.run_id)
-    if not raw_rows:
+    # ── 2. Read steps from Tether via tether_reader ───────────────────────────
+    try:
+        raw_steps = list(iter_steps_for_run(req.tether_db_path, req.run_id))
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot read Tether database: {exc}",
+        ) from exc
+    except sqlite3.OperationalError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot read Tether database: {exc}",
+        ) from exc
+
+    if not raw_steps:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"run_id '{req.run_id}' not found or has no completed llm_call steps.",
         )
 
     # ── 3. Parse and filter steps ─────────────────────────────────────────────
-    steps = [s for row in raw_rows if (s := _parse_step(row)) is not None]
+    steps = [s for ts in raw_steps if (s := _parse_step(ts)) is not None]
     if not steps:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -193,7 +191,6 @@ async def replay(req: ReplayRequest) -> ReplayResponse:
     alternate_cost_total = Decimal("0")
 
     for i, step in enumerate(steps):
-        # Score the original captured response
         primary_score = _score_response_fast(step["prompt"], step["response"])
         primary_scores.append(primary_score.rdab_score)
 
@@ -201,7 +198,6 @@ async def replay(req: ReplayRequest) -> ReplayResponse:
             with contextlib.suppress(InvalidOperation):
                 primary_cost_total += Decimal(str(step["cost_usd"]))
 
-        # Replay against alternate model — 30 s timeout, no retry (spec: MVP scope)
         try:
             import asyncio
             async with asyncio.timeout(30.0):
@@ -223,7 +219,7 @@ async def replay(req: ReplayRequest) -> ReplayResponse:
             str(alt_pricing.estimate_cost(alt_in_tok, alt_out_tok))
         )
 
-    # ── 5. Bootstrap CI ───────────────────────────────────────────────────────
+    # ── 5. Bootstrap CI (scipy percentile, seed=42) ───────────────────────────
     n_calls = len(steps)
     deltas = [a - p for a, p in zip(alternate_scores, primary_scores, strict=True)]
     ci_low, ci_high = _bootstrap_ci(deltas, req.n_bootstrap_samples)
