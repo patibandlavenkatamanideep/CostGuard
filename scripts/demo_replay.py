@@ -29,6 +29,9 @@ import sys
 import time
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent.parent / ".env")
+
 TETHER_DB = Path("/tmp/demo_tether.db")
 COSTGUARD_URL = os.getenv("COSTGUARD_URL", "http://localhost:8000")
 PRIMARY_MODEL = "gpt-4o-mini"

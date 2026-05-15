@@ -2,7 +2,7 @@
 
 > **Open-source LLM evaluation proxy.** Unlike LiteLLM, Helicone, or Portkey, CostGuard's reliability layer is grounded in [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) — 1,412+ empirical runs across 39 tasks and 12 models. You get RDAB-calibrated validity scoring on every proxy call, plus retries, circuit breakers, cost tracking, and alerting.
 >
-> CostGuard is the runtime layer of a three-project evaluation stack: [RDAB](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) (benchmark methodology) → CostGuard (runtime enforcement) → [Tether](https://github.com/patibandlavenkatamanideep/Tether) (trace capture). See [How This Fits With RDAB and Tether](#how-this-fits-with-rdab-and-tether) for the full architecture.
+> CostGuard is the runtime layer of [The Evaluation Stack](https://github.com/patibandlavenkatamanideep/RealDataAgentBench): [RDAB](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) (benchmark methodology) → CostGuard (runtime enforcement) → [Tether](https://github.com/patibandlavenkatamanideep/Tether) (trace capture). See [How This Fits With RDAB and Tether](#how-this-fits-with-rdab-and-tether) for the full architecture.
 
 [![CI/CD](https://github.com/patibandlavenkatamanideep/CostGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/patibandlavenkatamanideep/CostGuard/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
@@ -14,9 +14,9 @@
 
 ## What Is CostGuard?
 
-CostGuard is a self-hostable LLM proxy with a clear differentiator: every validity score it assigns is grounded in [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench), an empirical benchmark of 1,412+ runs across 39 tasks and 12 frontier models. Most proxies gate on latency and error codes. CostGuard gates on response quality — and has the benchmark data to calibrate those gates.
+**RDAB-calibrated validity scoring on every proxy call** — that's the differentiator. Most LLM proxies gate on latency and error codes. CostGuard gates on response quality using [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) empirical data: 1,412+ runs across 39 tasks and 12 frontier models.
 
-The headline capability is `/evaluate`: upload a dataset, get statistically grounded model recommendations with four-dimensional RDAB scorecards. The `/proxy` endpoint is the runtime delivery mechanism: a fast reliability filter that sits in your hot path.
+CostGuard is a self-hostable LLM proxy with two headline capabilities: `/proxy` — a fast reliability filter in your hot path (~1ms validity overhead) — and `/evaluate` — full RDAB dataset benchmarking that returns four-dimensional scorecards and cost-weighted model rankings. Add `/replay` to close the loop: replay captured Tether production traces against any alternate model and get a 95% bootstrap CI on the quality delta.
 
 - **Dataset benchmarking** (the unique part) — powered by [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench). Upload any CSV/Parquet and get a cost-weighted model ranking grounded in real benchmark data. The key RDAB finding: every frontier model scores ≤0.25 on statistical validity even when scoring 0.83–1.00 on correctness — correct-looking output ≠ sound reasoning.
 - **Real-time response filtering** — every `/proxy` call is scored with a RDAB-calibrated heuristic validator. Responses below your threshold are rejected automatically.
@@ -31,7 +31,7 @@ The headline capability is `/evaluate`: upload a dataset, get statistically grou
 
 ## How This Fits With RDAB and Tether
 
-CostGuard is the runtime layer of a three-project evaluation stack. Each project has a distinct job:
+CostGuard is the runtime layer of The Evaluation Stack. Each project has a distinct job:
 
 - **[RealDataAgentBench (RDAB)](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)** — the benchmark methodology. 39 tasks, 4-dimensional scoring (correctness, code quality, efficiency, statistical validity), 1,412+ runs. Produces the empirical scorecards that CostGuard uses.
 - **CostGuard (this repo)** — the runtime enforcement layer. Applies RDAB-calibrated scoring in the `/proxy` hot path, runs full RDAB evaluations via `/evaluate`, and adds circuit breakers, alerting, and Prometheus observability.
@@ -53,6 +53,41 @@ Production agent traffic
 ```
 
 Together, the stack enables something no single repo does alone: replay-based cost-routing recommendations with RDAB statistical confidence intervals against your actual production traffic — not synthetic benchmarks.
+
+---
+
+## Replay Production Traces
+
+This is the unique cross-project capability. [Tether](https://github.com/patibandlavenkatamanideep/Tether) wraps your OpenAI client and captures every production call to SQLite. `POST /replay` reads that database directly and replays every prompt against any alternate model — no Tether package dependency on this side.
+
+```bash
+# 1. Capture 25 calls with Tether (see Tether README for setup)
+# 2. Pass the db path + run_id to CostGuard:
+curl -X POST http://localhost:8000/replay \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tether_db_path": "/tmp/tether.db",
+    "run_id": "<uuid from TetheredOpenAI.run_id>",
+    "alternate_model": "gpt-4.1-mini",
+    "n_bootstrap_samples": 1000
+  }'
+```
+
+```json
+{
+  "primary_model": "gpt-4o-mini",
+  "alternate_model": "gpt-4.1-mini",
+  "n_calls": 25,
+  "delta": -0.0060,
+  "ci_low": -0.0312,
+  "ci_high": 0.0192,
+  "primary_cost_usd": 0.00048312,
+  "alternate_cost_usd": 0.00031205,
+  "savings_per_call_usd": 0.00000684
+}
+```
+
+A CI that straddles 0 means the quality difference is not statistically significant — the cheaper model is a safe swap. See [`scripts/demo_replay.py`](scripts/demo_replay.py) for a full end-to-end demo.
 
 ---
 
@@ -178,8 +213,6 @@ print(response["validity_score"])    # heuristic scorecard
 print(response["cost_usd"])          # exact cost for this call
 print(response["fallback_used"])     # True if primary was rejected
 ```
-
-> **Threshold guidance:** `reject_threshold: 0.30` is a conservative starting point — at this level the filter mainly catches genuinely broken or evasive responses (empty output, tracebacks, "I cannot help"). It does **not** reliably catch fluent-but-statistically-unsound responses, which is the dominant failure mode in RDAB. There is no published calibration plot. If you need statistical validity enforcement, use `/evaluate` for batch benchmarking and treat `/proxy` as a fast sanity filter. Tune `reject_threshold` against a sample of your own model outputs before relying on it as a quality gate.
 
 ### Proxy Response Schema
 ```json
@@ -390,44 +423,11 @@ fly open
 
 ---
 
-### Option 3 — Koyeb (free tier, no sleep, no CLI needed)
-
-1. Go to [koyeb.com](https://www.koyeb.com/) → **Deploy** → **GitHub**
-2. Select `patibandlavenkatamanideep/CostGuard`
-3. Builder: **Dockerfile**, Port: **8501**, Health path: `/_stcore/health`
-4. Add env vars: `SECRET_KEY`, `PORT=8501`, `API_PORT=9000`, `COSTGUARD_DB_PATH=/tmp/costguard_history.db`, plus any provider keys
-5. Click **Deploy**
-
-**Free tier:** 512 MB RAM, 0.1 vCPU, always-on (no sleep). No persistent disk — SQLite resets on redeploy.
+For Koyeb and Hugging Face Spaces deployment, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ---
 
-### Option 4 — Hugging Face Spaces (free, great ML community visibility)
-
-1. Go to [huggingface.co/new-space](https://huggingface.co/new-space)
-2. Space SDK: **Docker**, Visibility: **Public**
-3. In the Space settings → **Secrets**: add `SECRET_KEY`, `OPENAI_API_KEY`, etc.
-4. Push the repo or link via GitHub integration
-
-Add this header to your Space's `README.md`:
-
-```yaml
----
-title: CostGuard
-emoji: 🛡️
-colorFrom: purple
-colorTo: blue
-sdk: docker
-app_port: 8501
-pinned: false
----
-```
-
-**Free tier:** 2 vCPU, 16 GB RAM (CPU Basic Space). No persistent storage on free tier.
-
----
-
-### Option 5 — Self-host with Docker Compose
+### Option 3 — Self-host with Docker Compose
 
 ```bash
 git clone https://github.com/patibandlavenkatamanideep/CostGuard.git
@@ -449,9 +449,9 @@ SQLite persists in the `costguard-data` Docker named volume across restarts and 
 |----------|-------------|--------|-----------------|---------------|
 | **Fly.io** | 256 MB | No | Yes (3 GB) | `fly.toml` ✅ ready |
 | **Render** | 512 MB | Yes (15 min) | No (free) | `render.yaml` ✅ ready |
-| **Koyeb** | 512 MB | No | No | Dashboard only |
-| **HF Spaces** | 16 GB | No | No (free) | README header |
 | **Self-host** | Unlimited | No | Yes | `.env` only |
+
+More options (Koyeb, Hugging Face Spaces) in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ---
 
@@ -524,35 +524,8 @@ curl -X POST http://localhost:8000/evaluate \
 ```
 
 ### POST `/replay` — Replay a Tether run against an alternate model
-```bash
-curl -X POST http://localhost:8000/replay \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tether_db_path": "/tmp/demo_tether.db",
-    "run_id": "<uuid from TetheredOpenAI.run_id>",
-    "alternate_model": "gpt-4.1-mini",
-    "n_bootstrap_samples": 1000
-  }'
-```
 
-Response:
-```json
-{
-  "primary_model": "gpt-4o-mini",
-  "alternate_model": "gpt-4.1-mini",
-  "n_calls": 25,
-  "primary_mean_score": 0.6240,
-  "alternate_mean_score": 0.6180,
-  "delta": -0.0060,
-  "ci_low": -0.0312,
-  "ci_high": 0.0192,
-  "primary_cost_usd": 0.00048312,
-  "alternate_cost_usd": 0.00031205,
-  "savings_per_call_usd": 0.00000684
-}
-```
-
-`delta = alternate_mean_score − primary_mean_score`. A CI that straddles 0 means the quality difference is not statistically significant. `savings_per_call_usd > 0` means the alternate model is cheaper.
+See [Replay Production Traces](#replay-production-traces) above for the full example and response schema.
 
 ### GET `/health` — Deep health check
 ```bash
@@ -596,33 +569,18 @@ mypy backend/ evaluation/
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| LLM proxy with auto-reject + fallback | ✅ Complete | `POST /proxy` |
-| Per-call timeout (30s, per-attempt) | ✅ Complete | `asyncio.timeout` inside retry loop |
-| Same-model retry + exponential backoff | ✅ Complete | tenacity: 3 attempts, 1–8s backoff, 429/503/connection errors |
-| Per-IP rate limiting (LRU-bounded) | ✅ Complete | Token bucket, capped at 10K IPs |
-| Per-provider circuit breaker | ✅ Complete | CLOSED/OPEN/HALF_OPEN state machine |
-| Circuit breaker state persistence | ✅ Complete (single-node) | SQLite `runtime_state` table; survives restarts |
+| LLM proxy with auto-reject + fallback | ✅ Complete | `POST /proxy` — RDAB-calibrated heuristic scorer |
+| Per-provider circuit breaker | ✅ Complete | CLOSED/OPEN/HALF_OPEN; state persists across restarts |
 | 6 alert types with cooldown | ✅ Complete | Slack + generic webhook; cooldowns persist across restarts |
-| Gemini SDK (google-genai ≥ 1.0) | ✅ Complete | Per-call client objects; no global state; full concurrency |
-| Prometheus metrics (13 metrics) | ✅ Complete | `/metrics` endpoint |
-| Grafana dashboard | ✅ Complete | Auto-provisioned in `--profile monitoring` |
-| SQLite WAL mode (observability) | ✅ Complete (single-node) | Concurrent read/write safe |
-| Named Docker volume | ✅ Complete | DB survives container restarts |
-| Request ID propagation | ✅ Complete | `X-Request-ID` header + log correlation |
-| Security headers | ✅ Complete | X-Frame-Options, X-Content-Type-Options, etc. |
-| OpenTelemetry traces | ✅ Complete | Opt-in via `OTEL_EXPORTER_OTLP_ENDPOINT` |
-| Non-root Docker user | ✅ Complete | UID 1001 |
-| Multi-stage Dockerfile | ✅ Complete | Builder + minimal runtime |
-| `.dockerignore` | ✅ Complete | Prevents `.env` from baking into image |
-| CI security scanning | ✅ Complete | Bandit + Trivy + pip-audit |
 | Tether replay (`POST /replay`) | ✅ Complete | Reads Tether SQLite, replays against alternate model, 95% bootstrap CI |
+| Prometheus metrics (13 metrics) + Grafana | ✅ Complete | Auto-provisioned dashboard via `--profile monitoring` |
+| OpenTelemetry traces | ✅ Complete | Opt-in via `OTEL_EXPORTER_OTLP_ENDPOINT` |
+| CI security scanning | ✅ Complete | Bandit + Trivy + pip-audit in GitHub Actions |
 | Proxy unit tests (73 total) | ✅ Complete | CB, alerting, persistence, retry, middleware, scorer |
 | Replay unit tests (17 total) | ✅ Complete | tether_reader (5), bootstrap CI (5), endpoint (7) |
 | Load test | ✅ Complete | `locust -f tests/locustfile.py` — finds RPS ceiling |
-| LLM client connection pooling | ⚠️ Known limitation | Default-key clients cached; per-request keys get fresh clients |
-| Proxy heuristic scorer | ⚠️ Known limitation | Fast pre-filter (~1ms), not full RDAB evaluation |
 | Multi-replica CB/alert state | ⚠️ Known limitation | Requires Redis for shared state across replicas |
-| Observability store (multi-node) | ⚠️ Known limitation | SQLite is single-node only; replace with PostgreSQL + asyncpg |
+| Observability store (multi-node) | ⚠️ Known limitation | SQLite single-node only; replace with PostgreSQL + asyncpg |
 
 ---
 
@@ -640,4 +598,6 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-*Built with FastAPI, Streamlit, and [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench). The /evaluate endpoint gives you statistical grounding for model selection. The /proxy endpoint gives you a fast reliability filter in your hot path.*
+Built by [Venkata Manideep Patibandla](https://venkatamanideep.com) · [LinkedIn](https://linkedin.com/in/manideep-analytics) · [GitHub](https://github.com/patibandlavenkatamanideep)
+
+Part of The Evaluation Stack: [RDAB](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) · [CostGuard](https://github.com/patibandlavenkatamanideep/CostGuard) · [Tether](https://github.com/patibandlavenkatamanideep/Tether)
