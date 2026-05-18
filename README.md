@@ -18,7 +18,7 @@
 
 CostGuard is a self-hostable LLM proxy with two headline capabilities: `/proxy` — a fast reliability filter in your hot path (~1ms validity overhead) — and `/evaluate` — full RDAB dataset benchmarking that returns four-dimensional scorecards and cost-weighted model rankings. Add `/replay` to close the loop: replay captured Tether production traces against any alternate model and get a 95% bootstrap CI on the quality delta.
 
-- **Dataset benchmarking** (the unique part) — powered by [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench). Upload any CSV/Parquet and get a cost-weighted model ranking grounded in real benchmark data. The key RDAB finding: every frontier model scores ≤0.25 on statistical validity even when scoring 0.83–1.00 on correctness — correct-looking output ≠ sound reasoning.
+- **Dataset benchmarking** — powered by [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench). Upload any CSV/Parquet and get a cost-weighted model ranking grounded in real benchmark data. The key RDAB finding: every frontier model scores ≤0.25 on statistical validity even when scoring 0.83–1.00 on correctness — correct-looking output ≠ sound reasoning.
 - **Real-time response filtering** — every `/proxy` call is scored with a RDAB-calibrated heuristic validator. Responses below your threshold are rejected automatically.
 - **Automatic fallback** — on rejection, CostGuard retries with the next model in your fallback chain.
 - **Exact cost tracking** — per-call token accounting at $0.000001 precision across 12 models and 5 providers.
@@ -112,7 +112,7 @@ If you need true response quality assurance: use `/evaluate` for batch benchmark
 
 ## Run It Yourself
 
-CostGuard is self-hosted. Run it locally with `./scripts/dev.sh` in under a minute, or deploy to your own infrastructure using any platform below. No hosted demo — your data stays on your machine.
+A read-only live demo runs at [costguard-production-3afa.up.railway.app](https://costguard-production-3afa.up.railway.app/) — no API keys stored, evaluation uses simulation mode. For full live-mode access with your own keys and data, self-host using the instructions below.
 
 ---
 
