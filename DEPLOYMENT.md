@@ -1,6 +1,6 @@
 # Additional Deployment Options
 
-The main [README](README.md) covers Render, Fly.io, and self-host with Docker Compose. This page documents two additional free-tier options.
+The main [README](README.md) covers Railway and self-host with Docker Compose. This page documents two additional options.
 
 ---
 
