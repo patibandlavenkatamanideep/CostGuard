@@ -38,9 +38,9 @@ env/
 *.sqlite3
 /tmp/costguard/
 
-# Docs (not needed at runtime)
-*.md
-LICENSE
+# Docs (not needed at runtime — keep README.md: hatchling needs it for package metadata)
 CHANGELOG.md
 CONTRIBUTING.md
 SECURITY.md
+DEPLOYMENT.md
+LICENSE
