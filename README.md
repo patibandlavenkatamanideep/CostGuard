@@ -8,8 +8,6 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Powered by RDAB](https://img.shields.io/badge/Evaluation-RealDataAgentBench-7c3aed)](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/patibandlavenkatamanideep/CostGuard)
-
 ---
 
 ## What Is CostGuard?
@@ -376,50 +374,18 @@ pip install -e .
 
 ---
 
-### Option 1 — Render (zero-config, free tier)
+### Option 1 — Railway (recommended — always-on, persistent storage)
 
-Config is already in [`render.yaml`](render.yaml). Connect your GitHub repo in the Render dashboard and click **Deploy**.
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/patibandlavenkatamanideep/CostGuard)
-
-**Free tier caveats:** spins down after 15 min inactivity (30s cold start on next request). No persistent disk on free tier — SQLite resets on redeploy. Upgrade to a paid instance ($7/month) to add a disk.
+Config is already in [`railway.json`](railway.json). Connect your GitHub repo in the Railway dashboard and deploy in one click.
 
 ```bash
-# After deploying, add secrets in Render Dashboard → Environment
+# After deploying, add secrets in Railway Dashboard → Variables
 SECRET_KEY=<openssl rand -hex 32>
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=sk-...   # at least one provider
+COSTGUARD_DB_PATH=/data/costguard_history.db
 ```
 
----
-
-### Option 2 — Fly.io (recommended free tier — always-on + persistent storage)
-
-Config is already in [`fly.toml`](fly.toml). Fly's free allowance includes 3 always-on shared VMs and 3 GB of persistent volume storage — SQLite survives deploys and restarts.
-
-```bash
-# Install Fly CLI: https://fly.io/docs/hands-on/install-flyctl/
-fly auth login
-
-# Create app (pick a globally unique name)
-fly apps create costguard-yourname
-
-# Edit fly.toml: change app = "costguard-yourname" to match
-
-# Create persistent volume for SQLite
-fly volumes create costguard_data --region iad --size 1
-
-# Set secrets
-fly secrets set SECRET_KEY=$(openssl rand -hex 32)
-fly secrets set OPENAI_API_KEY=sk-...          # at least one provider
-
-# Deploy (uses Dockerfile automatically)
-fly deploy
-
-# Open in browser
-fly open
-```
-
-**Free tier:** 3 shared-cpu-1x VMs (256 MB RAM each), 160 GB outbound transfer/month. No sleep.
+The live demo runs on Railway at [costguard-production-3afa.up.railway.app](https://costguard-production-3afa.up.railway.app/).
 
 ---
 
@@ -427,7 +393,7 @@ For Koyeb and Hugging Face Spaces deployment, see [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ---
 
-### Option 3 — Self-host with Docker Compose
+### Option 2 — Self-host with Docker Compose
 
 ```bash
 git clone https://github.com/patibandlavenkatamanideep/CostGuard.git
@@ -445,10 +411,9 @@ SQLite persists in the `costguard-data` Docker named volume across restarts and 
 
 ### Platform comparison
 
-| Platform | Free tier RAM | Sleep? | Persistent disk? | Config needed |
-|----------|-------------|--------|-----------------|---------------|
-| **Fly.io** | 256 MB | No | Yes (3 GB) | `fly.toml` ✅ ready |
-| **Render** | 512 MB | Yes (15 min) | No (free) | `render.yaml` ✅ ready |
+| Platform | RAM | Sleep? | Persistent disk? | Config needed |
+|----------|-----|--------|-----------------|---------------|
+| **Railway** | 512 MB+ | No | Yes | `railway.json` ✅ ready |
 | **Self-host** | Unlimited | No | Yes | `.env` only |
 
 More options (Koyeb, Hugging Face Spaces) in [DEPLOYMENT.md](DEPLOYMENT.md).
@@ -493,8 +458,7 @@ costguard/
 ├── .dockerignore
 ├── docker-compose.yml     # Named volume + optional monitoring profile
 ├── Dockerfile             # Multi-stage build (builder + non-root runtime)
-├── fly.toml               # Fly.io deployment (always-on, persistent SQLite)
-├── render.yaml            # Render deployment (zero-config)
+├── railway.json           # Railway deployment config
 └── pyproject.toml
 ```
 
