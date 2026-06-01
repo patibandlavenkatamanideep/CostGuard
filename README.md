@@ -14,8 +14,6 @@
 
 <video src="https://github.com/user-attachments/assets/f82997cd-c2f8-4298-b716-4b7810ced97c" controls width="100%"></video>
 
-*Live walkthrough of the Streamlit dashboard, proxy calls, and `/replay` workflow on Railway.*
-
 ---
 
 ## What Is CostGuard?
