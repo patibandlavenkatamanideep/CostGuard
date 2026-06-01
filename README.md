@@ -10,6 +10,12 @@
 [![Powered by RDAB](https://img.shields.io/badge/Evaluation-RealDataAgentBench-7c3aed)](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)
 ---
 
+## Demo
+
+[▶ Watch the demo (v1.0.0)](https://github.com/patibandlavenkatamanideep/CostGuard/releases/download/v1.0.0/costguard_demo.mov) — live walkthrough of the Streamlit dashboard, proxy calls, and `/replay` workflow on Railway.
+
+---
+
 ## What Is CostGuard?
 
 **RDAB-calibrated validity scoring on every proxy call** — that's the differentiator. Most LLM proxies gate on latency and error codes. CostGuard gates on response quality using [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) empirical data: 1,412+ runs across 39 tasks and 12 frontier models.
