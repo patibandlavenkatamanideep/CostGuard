@@ -12,7 +12,9 @@
 
 ## Demo
 
-[▶ Watch the demo (v1.0.0)](https://github.com/patibandlavenkatamanideep/CostGuard/releases/download/v1.0.0/costguard_demo.mov) — live walkthrough of the Streamlit dashboard, proxy calls, and `/replay` workflow on Railway.
+<video src="https://github.com/user-attachments/assets/f82997cd-c2f8-4298-b716-4b7810ced97c" controls width="100%"></video>
+
+*Live walkthrough of the Streamlit dashboard, proxy calls, and `/replay` workflow on Railway.*
 
 ---
 
