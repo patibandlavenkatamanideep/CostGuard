@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     secret_key: str = Field(default="dev-secret-change-in-prod")
 
+    # ── Auth ────────────────────────────────────────────────────────────────
+    # Bearer token required on every non-public route. The proxy/evaluate/replay
+    # endpoints hold or accept provider API keys, so an unauthenticated public
+    # instance is an open relay. See backend/auth.py.
+    costguard_api_key: str | None = None
+    # Escape hatch for the public read-only demo: allow the app to start in
+    # production with no API key (all protected routes become open). Off by default.
+    costguard_allow_unauthenticated: bool = False
+
     @field_validator("secret_key")
     @classmethod
     def validate_secret_key(cls, v: str, info) -> str:

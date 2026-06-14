@@ -1,13 +1,31 @@
 """
 LLM pricing catalogue — aligned with RealDataAgentBench provider support.
 Prices are in USD per 1,000 tokens (input / output).
-Source: official provider pricing pages, April 2026.
-Update this file as prices change.
+Source: official provider pricing pages.
+
+When you update prices, bump PRICING_AS_OF below. A freshness test
+(tests/test_pricing_freshness.py) fails once the catalogue is older than
+PRICING_MAX_AGE_DAYS, so stale cost estimates surface in CI instead of silently
+misreporting spend.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
+
+# Last date the prices below were verified against provider pricing pages (ISO 8601).
+# Bump this whenever you edit any price in MODELS.
+PRICING_AS_OF = "2026-04-01"
+
+# Maximum age before the freshness check fails. Prices drift; re-verify quarterly.
+PRICING_MAX_AGE_DAYS = 180
+
+
+def pricing_age_days(today: date | None = None) -> int:
+    """Days since the catalogue was last verified (PRICING_AS_OF)."""
+    today = today or date.today()
+    return (today - date.fromisoformat(PRICING_AS_OF)).days
 
 
 @dataclass(frozen=True)
