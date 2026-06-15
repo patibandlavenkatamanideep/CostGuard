@@ -21,7 +21,6 @@ from backend.metrics import PrometheusMiddleware, metrics_endpoint, setup_otel
 from backend.middleware import RateLimitMiddleware, RequestIDMiddleware, SecurityHeadersMiddleware
 from backend.models import (
     ErrorResponse,
-    EvalRequest,
     EvalResponse,
     HealthResponse,
     SessionKeys,
@@ -34,6 +33,7 @@ configure_logging(settings.log_level)
 
 # ─── Lifespan ────────────────────────────────────────────────────────────────
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"CostGuard API starting (env={settings.app_env}, version=0.2.0)")
@@ -42,6 +42,7 @@ async def lifespan(app: FastAPI):
     # Ensure SQLite DB is initialised at startup
     try:
         from evaluation.observability import init_db
+
         init_db()
         logger.info("Observability DB ready")
     except Exception as exc:
@@ -49,7 +50,8 @@ async def lifespan(app: FastAPI):
 
     # Restore circuit breaker and alert engine state from previous run
     try:
-        from backend.proxy import _circuit_registry, _alert_engine
+        from backend.proxy import _alert_engine, _circuit_registry
+
         _circuit_registry.load_state()
         _alert_engine.load_state()
     except Exception as exc:
@@ -59,7 +61,8 @@ async def lifespan(app: FastAPI):
 
     # Persist state so the next process restart continues from where we stopped
     try:
-        from backend.proxy import _circuit_registry, _alert_engine
+        from backend.proxy import _alert_engine, _circuit_registry
+
         _circuit_registry.save_state()
         _alert_engine.save_state()
         logger.info("Runtime state persisted to DB")
@@ -103,6 +106,7 @@ app.add_middleware(
 
 # ─── Exception handlers ──────────────────────────────────────────────────────
 
+
 @app.exception_handler(DataLoadError)
 async def data_load_error_handler(request: Request, exc: DataLoadError) -> JSONResponse:
     return JSONResponse(
@@ -128,13 +132,16 @@ async def generic_error_handler(request: Request, exc: Exception) -> JSONRespons
 # ─── Proxy router (new) ───────────────────────────────────────────────────────
 
 from backend.proxy import router as proxy_router  # noqa: E402
+
 app.include_router(proxy_router)
 
 from backend.replay import router as replay_router  # noqa: E402
+
 app.include_router(replay_router)
 
 
 # ─── Routes ──────────────────────────────────────────────────────────────────
+
 
 @app.get("/metrics", include_in_schema=False)
 async def prometheus_metrics(request: Request):
@@ -151,6 +158,7 @@ async def health_check() -> HealthResponse:
     rdab_available = False
     try:
         import realdataagentbench  # noqa: F401
+
         rdab_available = True
     except ImportError:
         pass
@@ -159,6 +167,7 @@ async def health_check() -> HealthResponse:
     db_ok = False
     try:
         from evaluation.observability import get_total_eval_count
+
         get_total_eval_count()
         db_ok = True
     except Exception:
@@ -168,6 +177,7 @@ async def health_check() -> HealthResponse:
     cb_states: dict = {}
     try:
         from backend.proxy import _circuit_registry
+
         cb_states = _circuit_registry.status_all()
     except Exception:
         pass
@@ -220,8 +230,9 @@ async def evaluate_dataset(
 
     API keys are used only for this request and are never stored or logged.
     """
-    from backend.metrics import eval_requests_total, active_evaluations
     import time
+
+    from backend.metrics import active_evaluations, eval_requests_total
 
     request_id = "eval-" + str(uuid.uuid4())[:8]
     content = await file.read()
@@ -252,7 +263,7 @@ async def evaluate_dataset(
     mode_label = "live" if session_keys.has_any_key() else "simulation"
 
     logger.info(
-        f"[{request_id}] Evaluation started: '{filename}' ({len(content)/1024:.1f} KB) "
+        f"[{request_id}] Evaluation started: '{filename}' ({len(content) / 1024:.1f} KB) "
         f"mode={mode_label} providers={session_keys.live_providers()}"
     )
 
@@ -271,6 +282,7 @@ async def evaluate_dataset(
         )
         eval_requests_total.labels(mode=mode_label, status="success").inc()
         from backend.metrics import eval_duration_seconds
+
         eval_duration_seconds.labels(mode=mode_label).observe(time.monotonic() - eval_start)
     except Exception:
         eval_requests_total.labels(mode=mode_label, status="error").inc()
@@ -309,6 +321,7 @@ async def list_models() -> dict:
 
 
 # ─── Entry point ─────────────────────────────────────────────────────────────
+
 
 def run() -> None:
     uvicorn.run(

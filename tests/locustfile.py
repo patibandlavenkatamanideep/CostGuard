@@ -28,7 +28,6 @@ import random
 
 from locust import HttpUser, between, task
 
-
 _API_KEY = os.getenv("LOAD_TEST_API_KEY", "")
 _MODEL = os.getenv("LOAD_TEST_MODEL", "gpt-4.1")
 

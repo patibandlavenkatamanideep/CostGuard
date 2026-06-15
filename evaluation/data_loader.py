@@ -57,9 +57,9 @@ def _read_csv_robust(file_obj: io.IOBase, filename: str) -> pd.DataFrame:
             df = pd.read_csv(
                 io.BytesIO(raw),
                 encoding=encoding,
-                sep=None,              # auto-sniff: comma, semicolon, tab, pipe …
-                on_bad_lines="skip",   # skip rows with wrong field count
-                engine="python",       # required for sep=None and more lenient overall
+                sep=None,  # auto-sniff: comma, semicolon, tab, pipe …
+                on_bad_lines="skip",  # skip rows with wrong field count
+                engine="python",  # required for sep=None and more lenient overall
             )
             logger.info(f"Loaded '{filename}' with encoding={encoding}, sep=auto-sniffed")
             return df
@@ -132,10 +132,7 @@ def load_bytes(content: bytes, filename: str) -> pd.DataFrame:
 
     buf = io.BytesIO(content)
     try:
-        if suffix == ".csv":
-            df = _read_csv_robust(buf, filename)
-        else:
-            df = pd.read_parquet(buf)
+        df = _read_csv_robust(buf, filename) if suffix == ".csv" else pd.read_parquet(buf)
     except DataLoadError:
         raise
     except Exception as exc:
@@ -175,9 +172,7 @@ def dataframe_to_prompt_text(df: pd.DataFrame, max_rows: int = 50) -> str:
     suitable for inclusion in an LLM prompt.
     """
     sample = df.head(max_rows)
-    schema_lines = [
-        f"  - {col} ({dtype})" for col, dtype in df.dtypes.items()
-    ]
+    schema_lines = [f"  - {col} ({dtype})" for col, dtype in df.dtypes.items()]
     schema_text = "\n".join(schema_lines)
 
     stats_parts = []

@@ -5,15 +5,13 @@ from __future__ import annotations
 import asyncio
 import time
 
-import pytest
-
-from backend.circuit_breaker import CircuitBreaker, CircuitBreakerRegistry
 from backend.alerting import AlertEngine
+from backend.circuit_breaker import CircuitBreaker, CircuitBreakerRegistry
+from backend.middleware import _LRUBucketDict, _TokenBucket
 from backend.proxy import _score_response_fast
-from backend.middleware import _TokenBucket, _LRUBucketDict
-
 
 # ─── Circuit Breaker ─────────────────────────────────────────────────────────
+
 
 class TestCircuitBreaker:
     def test_starts_closed(self):
@@ -44,7 +42,9 @@ class TestCircuitBreaker:
         assert cb.allow_request()
 
     def test_closes_after_successes_in_half_open(self):
-        cb = CircuitBreaker(provider="openai", failure_threshold=1, timeout_seconds=0.01, success_threshold=2)
+        cb = CircuitBreaker(
+            provider="openai", failure_threshold=1, timeout_seconds=0.01, success_threshold=2
+        )
         cb.record_failure()
         time.sleep(0.02)
         assert cb.state == "half_open"
@@ -91,6 +91,7 @@ class TestCircuitBreaker:
 
 # ─── Heuristic Validity Scorer ───────────────────────────────────────────────
 
+
 class TestScoreResponseFast:
     def test_empty_response_scores_zero(self):
         sc = _score_response_fast("q", "")
@@ -132,6 +133,7 @@ class TestScoreResponseFast:
 
 # ─── Alerting Engine ─────────────────────────────────────────────────────────
 
+
 class TestAlertEngine:
     def test_validity_no_alert_above_threshold(self):
         engine = AlertEngine()
@@ -167,6 +169,7 @@ class TestAlertEngine:
 
     def test_cooldown_prevents_duplicate_alerts(self):
         import time
+
         engine = AlertEngine()
         engine._last_fired["validity:gpt-4.1"] = time.time()  # just fired
         fired_alerts = []
@@ -180,6 +183,7 @@ class TestAlertEngine:
 
 
 # ─── Token Bucket ─────────────────────────────────────────────────────────────
+
 
 class TestTokenBucket:
     def test_allows_requests_within_capacity(self):
@@ -202,6 +206,7 @@ class TestTokenBucket:
 
 
 # ─── LRU Bucket Dict ─────────────────────────────────────────────────────────
+
 
 class TestLRUBucketDict:
     def test_evicts_oldest_when_full(self):
@@ -230,52 +235,63 @@ class TestLRUBucketDict:
 
 # ─── Retry helper ─────────────────────────────────────────────────────────────
 
+
 class TestIsRetryable:
     def test_429_is_retryable(self):
         from backend.proxy import _is_retryable
+
         assert _is_retryable(Exception("HTTP 429 Too Many Requests"))
 
     def test_rate_limit_is_retryable(self):
         from backend.proxy import _is_retryable
+
         assert _is_retryable(Exception("rate limit exceeded"))
 
     def test_503_is_retryable(self):
         from backend.proxy import _is_retryable
+
         assert _is_retryable(Exception("503 Service Unavailable"))
 
     def test_overloaded_is_retryable(self):
         from backend.proxy import _is_retryable
+
         assert _is_retryable(Exception("model overloaded"))
 
     def test_timeout_not_retryable(self):
         from backend.proxy import _is_retryable
-        assert not _is_retryable(asyncio.TimeoutError())
+
+        assert not _is_retryable(TimeoutError())
 
     def test_http_exception_not_retryable(self):
-        from backend.proxy import _is_retryable
         from fastapi import HTTPException
+
+        from backend.proxy import _is_retryable
+
         assert not _is_retryable(HTTPException(status_code=400, detail="bad"))
 
     def test_auth_error_not_retryable(self):
         from backend.proxy import _is_retryable
+
         assert not _is_retryable(Exception("401 Unauthorized"))
 
     def test_connection_refused_retryable(self):
         from backend.proxy import _is_retryable
+
         assert _is_retryable(ConnectionError("connection refused"))
 
 
 # ─── Circuit Breaker State Persistence ───────────────────────────────────────
 
+
 class TestCircuitBreakerPersistence:
     def test_save_and_restore_open_state(self, tmp_path, monkeypatch):
         """CB state saved in one registry should reload correctly in a new one."""
-        import os
         db_path = tmp_path / "test_state.db"
         monkeypatch.setenv("COSTGUARD_DB_PATH", str(db_path))
         monkeypatch.setenv("COSTGUARD_STATE_BACKEND", "sqlite")
         # Invalidate lru_cache so settings pick up new env
         from backend.config import get_settings
+
         get_settings.cache_clear()
 
         reg1 = CircuitBreakerRegistry()
@@ -298,6 +314,7 @@ class TestCircuitBreakerPersistence:
         monkeypatch.setenv("COSTGUARD_DB_PATH", str(db_path))
         monkeypatch.setenv("COSTGUARD_STATE_BACKEND", "sqlite")
         from backend.config import get_settings
+
         get_settings.cache_clear()
 
         reg1 = CircuitBreakerRegistry()
@@ -316,6 +333,7 @@ class TestCircuitBreakerPersistence:
         monkeypatch.setenv("COSTGUARD_DB_PATH", str(db_path))
         monkeypatch.setenv("COSTGUARD_STATE_BACKEND", "sqlite")
         from backend.config import get_settings
+
         get_settings.cache_clear()
 
         reg = CircuitBreakerRegistry()
@@ -327,12 +345,14 @@ class TestCircuitBreakerPersistence:
 
 # ─── Alert Engine State Persistence ──────────────────────────────────────────
 
+
 class TestAlertEnginePersistence:
     def test_save_and_restore_cooldowns(self, tmp_path, monkeypatch):
         db_path = tmp_path / "alert_state.db"
         monkeypatch.setenv("COSTGUARD_DB_PATH", str(db_path))
         monkeypatch.setenv("COSTGUARD_STATE_BACKEND", "sqlite")
         from backend.config import get_settings
+
         get_settings.cache_clear()
 
         eng1 = AlertEngine()
@@ -350,5 +370,5 @@ class TestAlertEnginePersistence:
     def test_load_state_disabled_backend(self, monkeypatch):
         monkeypatch.setenv("COSTGUARD_STATE_BACKEND", "none")
         eng = AlertEngine()
-        eng.load_state()   # must not raise or write anything
-        eng.save_state()   # must not raise
+        eng.load_state()  # must not raise or write anything
+        eng.save_state()  # must not raise

@@ -92,6 +92,9 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "--cov=backend --cov=evaluation --cov-report=term-missing"
+markers = [
+    "integration: tests that require a running CostGuard server (skipped if none reachable)",
+]
 
 [dependency-groups]
 dev = [

@@ -30,6 +30,7 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
+
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 TETHER_DB = Path("/tmp/demo_tether.db")
@@ -157,10 +158,12 @@ def print_report(result: dict) -> None:
     print(f"  Alternate model : {result['alternate_model']}")
     print(f"  Calls replayed  : {result['n_calls']}")
     print()
-    print(f"  Quality scores (RDAB heuristic):")
+    print("  Quality scores (RDAB heuristic):")
     print(f"    Primary   : {result['primary_mean_score']:.4f}")
     print(f"    Alternate : {result['alternate_mean_score']:.4f}")
-    print(f"    Delta     : {result['delta']:+.4f}  (95% CI [{result['ci_low']:+.4f}, {result['ci_high']:+.4f}])")
+    print(
+        f"    Delta     : {result['delta']:+.4f}  (95% CI [{result['ci_low']:+.4f}, {result['ci_high']:+.4f}])"
+    )
 
     ci_lo, ci_hi = result["ci_low"], result["ci_high"]
     if ci_lo > 0:
@@ -177,7 +180,7 @@ def print_report(result: dict) -> None:
     savings_per = result["savings_per_call_usd"]
     savings_total = savings_per * result["n_calls"]
     pct = (savings_total / primary_usd * 100) if primary_usd > 0 else 0.0
-    print(f"  Cost (this run):")
+    print("  Cost (this run):")
     print(f"    Primary   : ${primary_usd:.6f}")
     print(f"    Alternate : ${alternate_usd:.6f}")
     print(f"    Savings   : ${savings_total:.6f} total  (${savings_per:.8f}/call, {pct:.1f}%)")

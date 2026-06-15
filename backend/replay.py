@@ -31,6 +31,7 @@ router = APIRouter(prefix="/replay", tags=["Replay"])
 
 # ─── Schemas ──────────────────────────────────────────────────────────────────
 
+
 class ReplayRequest(BaseModel):
     tether_db_path: str = Field(description="Absolute path to Tether SQLite file.")
     run_id: str = Field(description="run_id from Tether's steps table.")
@@ -53,6 +54,7 @@ class ReplayResponse(BaseModel):
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _parse_step(ts: TetherStep) -> dict | None:
     """Extract prompt, system_prompt, and response text from a TetherStep.
@@ -127,7 +129,10 @@ def _bootstrap_ci(
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────
 
-@router.post("", response_model=ReplayResponse, summary="Replay a Tether run against an alternate model")
+
+@router.post(
+    "", response_model=ReplayResponse, summary="Replay a Tether run against an alternate model"
+)
 async def replay(req: ReplayRequest) -> ReplayResponse:
     """
     Read a captured Tether run, replay every prompt against `alternate_model`,
@@ -144,6 +149,7 @@ async def replay(req: ReplayRequest) -> ReplayResponse:
         )
 
     from evaluation.pricing import MODELS
+
     if req.alternate_model not in MODELS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -200,6 +206,7 @@ async def replay(req: ReplayRequest) -> ReplayResponse:
 
         try:
             import asyncio
+
             async with asyncio.timeout(30.0):
                 alt_text, alt_in_tok, alt_out_tok = await _call_llm(
                     model_id=req.alternate_model,
@@ -215,9 +222,7 @@ async def replay(req: ReplayRequest) -> ReplayResponse:
 
         alt_score = _score_response_fast(step["prompt"], alt_text)
         alternate_scores.append(alt_score.rdab_score)
-        alternate_cost_total += Decimal(
-            str(alt_pricing.estimate_cost(alt_in_tok, alt_out_tok))
-        )
+        alternate_cost_total += Decimal(str(alt_pricing.estimate_cost(alt_in_tok, alt_out_tok)))
 
     # ── 5. Bootstrap CI (scipy percentile, seed=42) ───────────────────────────
     n_calls = len(steps)

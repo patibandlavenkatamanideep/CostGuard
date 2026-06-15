@@ -18,17 +18,19 @@ from evaluation.pricing import MODELS, get_model, get_models_for_providers
 from evaluation.question_generator import generate_questions
 from evaluation.token_counter import count_tokens, estimate_batch_tokens
 
-
 # ─── Fixtures ────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def sample_csv_bytes() -> bytes:
-    df = pd.DataFrame({
-        "id": range(100),
-        "name": [f"Item_{i}" for i in range(100)],
-        "value": [i * 1.5 for i in range(100)],
-        "category": [["A", "B", "C", "D"][i % 4] for i in range(100)],
-    })
+    df = pd.DataFrame(
+        {
+            "id": range(100),
+            "name": [f"Item_{i}" for i in range(100)],
+            "value": [i * 1.5 for i in range(100)],
+            "category": [["A", "B", "C", "D"][i % 4] for i in range(100)],
+        }
+    )
     return df.to_csv(index=False).encode()
 
 
@@ -42,14 +44,17 @@ def sample_parquet_bytes() -> bytes:
 
 @pytest.fixture
 def sample_df() -> pd.DataFrame:
-    return pd.DataFrame({
-        "revenue": [100, 200, 300, 400, 500],
-        "region": ["N", "S", "E", "W", "N"],
-        "active": [True, False, True, True, False],
-    })
+    return pd.DataFrame(
+        {
+            "revenue": [100, 200, 300, 400, 500],
+            "region": ["N", "S", "E", "W", "N"],
+            "active": [True, False, True, True, False],
+        }
+    )
 
 
 # ─── Data Loader Tests ───────────────────────────────────────────────────────
+
 
 class TestDataLoader:
     def test_load_csv_bytes(self, sample_csv_bytes):
@@ -94,6 +99,7 @@ class TestDataLoader:
 
 
 # ─── Pricing Tests ───────────────────────────────────────────────────────────
+
 
 class TestPricing:
     def test_all_models_present(self):
@@ -152,6 +158,7 @@ class TestPricing:
 
 # ─── Question Generator Tests ────────────────────────────────────────────────
 
+
 class TestQuestionGenerator:
     def test_generates_correct_count(self, sample_df):
         questions = generate_questions(sample_df, num_questions=5)
@@ -173,6 +180,7 @@ class TestQuestionGenerator:
 
 
 # ─── Token Counter Tests ─────────────────────────────────────────────────────
+
 
 class TestTokenCounter:
     def test_count_tokens_returns_positive(self):
@@ -196,11 +204,13 @@ class TestTokenCounter:
 
 # ─── RDAB Simulation Tests ───────────────────────────────────────────────────
 
+
 class TestRDABSimulation:
     """Tests for the deterministic simulation fallback (no API keys needed)."""
 
     def test_simulation_returns_scorecard(self):
         from evaluation.engine import _simulate_scorecard
+
         pricing = get_model("gpt-4.1")
         assert pricing is not None
         sc, latency = _simulate_scorecard(pricing)
@@ -210,6 +220,7 @@ class TestRDABSimulation:
 
     def test_simulation_deterministic(self):
         from evaluation.engine import _simulate_scorecard
+
         pricing = get_model("claude-sonnet-4-6")
         assert pricing is not None
         sc1, _ = _simulate_scorecard(pricing, seed=42)
@@ -219,6 +230,7 @@ class TestRDABSimulation:
     def test_premium_beats_economy_on_correctness(self):
         """Premium models should score higher on correctness than economy."""
         from evaluation.engine import _simulate_scorecard
+
         premium = get_model("gpt-4.1")
         economy = get_model("gemini-2.5-flash")
         assert premium and economy
@@ -229,6 +241,7 @@ class TestRDABSimulation:
     def test_economy_better_efficiency(self):
         """Economy models should use fewer tokens → higher efficiency score."""
         from evaluation.engine import _simulate_scorecard
+
         premium = get_model("claude-sonnet-4-6")
         economy = get_model("claude-haiku-4-5-20251001")
         assert premium and economy
@@ -239,6 +252,7 @@ class TestRDABSimulation:
     def test_stat_validity_universally_low(self):
         """RDAB finding: all models score ~0.25 on stat_validity."""
         from evaluation.engine import _simulate_scorecard
+
         for model_id in ["gpt-4.1", "claude-sonnet-4-6", "gemini-2.5-flash"]:
             pricing = get_model(model_id)
             assert pricing is not None
@@ -250,6 +264,7 @@ class TestRDABSimulation:
     def test_all_models_get_valid_scores(self):
         """Every model in the catalogue should produce valid simulation scores."""
         from evaluation.engine import _simulate_scorecard
+
         for model_id, pricing in MODELS.items():
             sc, latency = _simulate_scorecard(pricing)
             assert 0 <= sc.rdab_score <= 1, f"{model_id} rdab_score out of range"
@@ -262,14 +277,31 @@ class TestRDABSimulation:
 
 # ─── API Integration Tests (require running server) ──────────────────────────
 
+
 @pytest.mark.integration
 class TestAPIIntegration:
     """These tests require a running FastAPI server. Run with: pytest -m integration"""
 
     @pytest.fixture(autouse=True)
     def client(self):
+        import os
+
         import httpx
-        self.client = httpx.Client(base_url="http://localhost:8000", timeout=60)
+
+        # Attach the API key if the server under test is secured; harmless in open-demo mode.
+        headers = {}
+        api_key = os.getenv("COSTGUARD_API_KEY")
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        self.client = httpx.Client(base_url="http://localhost:8000", timeout=60, headers=headers)
+        # These tests need a live server. Skip (not fail) when none is reachable
+        # so the default `pytest tests/` run stays green; run with the server up
+        # (or `pytest -m integration`) to exercise them.
+        try:
+            self.client.get("/health")
+        except httpx.ConnectError:
+            self.client.close()
+            pytest.skip("No CostGuard server reachable at http://localhost:8000")
         yield
         self.client.close()
 

@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterator
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Iterator
 
 
 @dataclass(frozen=True)
@@ -86,18 +86,15 @@ def iter_steps_for_run(
 
     where = " AND ".join(conditions)
 
+    # `where` is composed only of fixed literal conditions; all runtime values are
+    # bound via `params`, so this is not a SQL injection vector.
+    columns = (
+        "id, run_id, sequence_number, kind, model, inputs, outputs, "
+        "input_tokens, output_tokens, cost_usd, latency_ms, error, created_at, completed_at"
+    )
+    query = f"SELECT {columns} FROM steps WHERE {where} ORDER BY sequence_number ASC"  # nosec B608
     try:
-        cursor = conn.execute(
-            f"""
-            SELECT id, run_id, sequence_number, kind, model,
-                   inputs, outputs, input_tokens, output_tokens,
-                   cost_usd, latency_ms, error, created_at, completed_at
-            FROM   steps
-            WHERE  {where}
-            ORDER  BY sequence_number ASC
-            """,
-            params,
-        )
+        cursor = conn.execute(query, params)
         for row in cursor:
             yield _row_to_step(row)
     finally:

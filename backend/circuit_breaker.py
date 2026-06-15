@@ -14,12 +14,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-
 State = Literal["closed", "open", "half_open"]
 
-_FAILURE_THRESHOLD = 5       # failures before opening
-_SUCCESS_THRESHOLD = 2       # successes in HALF_OPEN before closing
-_TIMEOUT_SECONDS = 60.0      # seconds before OPEN → HALF_OPEN
+_FAILURE_THRESHOLD = 5  # failures before opening
+_SUCCESS_THRESHOLD = 2  # successes in HALF_OPEN before closing
+_TIMEOUT_SECONDS = 60.0  # seconds before OPEN → HALF_OPEN
 
 
 @dataclass
@@ -36,10 +35,12 @@ class CircuitBreaker:
 
     @property
     def state(self) -> State:
-        if self._state == "open":
-            if time.monotonic() - self._last_failure_time >= self.timeout_seconds:
-                self._state = "half_open"
-                self._success_count = 0
+        if (
+            self._state == "open"
+            and time.monotonic() - self._last_failure_time >= self.timeout_seconds
+        ):
+            self._state = "half_open"
+            self._success_count = 0
         return self._state
 
     def allow_request(self) -> bool:
@@ -67,7 +68,9 @@ class CircuitBreaker:
             "provider": self.provider,
             "state": self.state,
             "failure_count": self._failure_count,
-            "last_failure_age_s": round(time.monotonic() - self._last_failure_time, 1) if self._last_failure_time else None,
+            "last_failure_age_s": round(time.monotonic() - self._last_failure_time, 1)
+            if self._last_failure_time
+            else None,
         }
 
 
@@ -87,13 +90,15 @@ class CircuitBreakerRegistry:
         """Persist all circuit breaker states to SQLite. Called at shutdown."""
         try:
             from evaluation.observability import save_runtime_state
+
             snapshot: dict[str, Any] = {}
             now_wall = time.time()
             now_mono = time.monotonic()
             for provider, cb in self._breakers.items():
                 last_failure_wall = (
                     now_wall - (now_mono - cb._last_failure_time)
-                    if cb._last_failure_time > 0 else None
+                    if cb._last_failure_time > 0
+                    else None
                 )
                 snapshot[provider] = {
                     "state": cb._state,
@@ -107,12 +112,14 @@ class CircuitBreakerRegistry:
             save_runtime_state("circuit_breakers", snapshot)
         except Exception as exc:
             from backend.logger import logger
+
             logger.warning(f"[circuit_breaker] Failed to save state: {exc}")
 
     def load_state(self) -> None:
         """Restore circuit breaker states from SQLite. Called at startup."""
         try:
             from evaluation.observability import load_runtime_state
+
             snapshot = load_runtime_state("circuit_breakers")
             if not snapshot:
                 return
@@ -130,7 +137,9 @@ class CircuitBreakerRegistry:
                 else:
                     cb._last_failure_time = 0.0
             from backend.logger import logger
+
             logger.info(f"[circuit_breaker] Restored state for: {list(snapshot.keys())}")
         except Exception as exc:
             from backend.logger import logger
+
             logger.warning(f"[circuit_breaker] Failed to restore state: {exc}")

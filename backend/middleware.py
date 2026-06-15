@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 import uuid
 from collections import OrderedDict
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -30,7 +30,7 @@ class _LRUBucketDict:
         self._factory = factory
         self._data: OrderedDict = OrderedDict()
 
-    def __getitem__(self, key: str) -> "_TokenBucket":
+    def __getitem__(self, key: str) -> _TokenBucket:
         if key not in self._data:
             if len(self._data) >= self._maxsize:
                 self._data.popitem(last=False)  # evict oldest
@@ -40,6 +40,7 @@ class _LRUBucketDict:
 
 
 # ─── 1. Request ID ────────────────────────────────────────────────────────────
+
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
     """Injects a correlation ID into every request. Logged and returned in response."""
@@ -54,6 +55,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
 
 # ─── 2. Rate Limiting (token bucket per IP) ───────────────────────────────────
+
 
 class _TokenBucket:
     """Simple token bucket for a single client."""
@@ -92,6 +94,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """
 
     import os as _os
+
     _EVALUATE_CAPACITY = int(_os.getenv("RATE_LIMIT_EVALUATE_RPM", "5"))
     _PROXY_CAPACITY = int(_os.getenv("RATE_LIMIT_PROXY_RPM", "60"))
     _DEFAULT_CAPACITY = int(_os.getenv("RATE_LIMIT_DEFAULT_RPM", "120"))
@@ -155,6 +158,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 
 # ─── 3. Security Headers ──────────────────────────────────────────────────────
+
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Adds standard security headers to every response."""
