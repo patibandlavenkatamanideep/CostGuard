@@ -21,11 +21,9 @@ import time
 import uuid
 from typing import Any
 
-import httpx
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from tenacity import (
-    RetryError,
     retry,
     retry_if_exception,
     stop_after_attempt,
@@ -62,9 +60,9 @@ _xai_default: Any = None
 
 # ─── Retry configuration ──────────────────────────────────────────────────────
 
-_RETRY_ATTEMPTS = 3      # total attempts (1 original + 2 retries)
-_RETRY_WAIT_MIN = 1.0    # seconds before first retry
-_RETRY_WAIT_MAX = 8.0    # cap on exponential backoff
+_RETRY_ATTEMPTS = 3  # total attempts (1 original + 2 retries)
+_RETRY_WAIT_MIN = 1.0  # seconds before first retry
+_RETRY_WAIT_MAX = 8.0  # cap on exponential backoff
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -91,6 +89,7 @@ def _is_retryable(exc: BaseException) -> bool:
 def _get_anthropic(key: str):
     global _anthropic_default
     import anthropic
+
     if key == settings.anthropic_api_key:
         if _anthropic_default is None:
             _anthropic_default = anthropic.AsyncAnthropic(api_key=key)
@@ -101,6 +100,7 @@ def _get_anthropic(key: str):
 def _get_openai(key: str, base_url: str | None = None):
     global _openai_default
     import openai
+
     if base_url is None and key == settings.openai_api_key:
         if _openai_default is None:
             _openai_default = openai.AsyncOpenAI(api_key=key)
@@ -114,6 +114,7 @@ def _get_openai(key: str, base_url: str | None = None):
 def _get_groq(key: str):
     global _groq_default
     import groq
+
     if key == settings.groq_api_key:
         if _groq_default is None:
             _groq_default = groq.AsyncGroq(api_key=key)
@@ -122,6 +123,7 @@ def _get_groq(key: str):
 
 
 # ─── Request / Response schemas ───────────────────────────────────────────────
+
 
 class ProxyRequest(BaseModel):
     model_id: str = Field(
@@ -176,6 +178,7 @@ class ProxyResponse(BaseModel):
 
 # ─── LLM callers ─────────────────────────────────────────────────────────────
 
+
 async def _call_llm(
     model_id: str,
     prompt: str,
@@ -207,15 +210,25 @@ async def _call_llm(
         )
 
     if provider == "anthropic":
-        return await _call_anthropic(pricing.model_id, prompt, system_prompt, max_tokens, temperature, effective_key)
+        return await _call_anthropic(
+            pricing.model_id, prompt, system_prompt, max_tokens, temperature, effective_key
+        )
     elif provider == "openai":
-        return await _call_openai(pricing.model_id, prompt, system_prompt, max_tokens, temperature, effective_key)
+        return await _call_openai(
+            pricing.model_id, prompt, system_prompt, max_tokens, temperature, effective_key
+        )
     elif provider == "groq":
-        return await _call_groq(pricing.model_id, prompt, system_prompt, max_tokens, temperature, effective_key)
+        return await _call_groq(
+            pricing.model_id, prompt, system_prompt, max_tokens, temperature, effective_key
+        )
     elif provider == "google":
-        return await _call_gemini(pricing.model_id, prompt, system_prompt, max_tokens, temperature, effective_key)
+        return await _call_gemini(
+            pricing.model_id, prompt, system_prompt, max_tokens, temperature, effective_key
+        )
     elif provider == "xai":
-        return await _call_xai(pricing.model_id, prompt, system_prompt, max_tokens, temperature, effective_key)
+        return await _call_xai(
+            pricing.model_id, prompt, system_prompt, max_tokens, temperature, effective_key
+        )
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -235,8 +248,12 @@ def _get_server_key(provider: str) -> str | None:
 
 
 async def _call_anthropic(
-    model_id: str, prompt: str, system: str | None,
-    max_tokens: int, temp: float, key: str,
+    model_id: str,
+    prompt: str,
+    system: str | None,
+    max_tokens: int,
+    temp: float,
+    key: str,
 ) -> tuple[str, int, int]:
     client = _get_anthropic(key)
     kwargs: dict[str, Any] = {
@@ -253,8 +270,12 @@ async def _call_anthropic(
 
 
 async def _call_openai(
-    model_id: str, prompt: str, system: str | None,
-    max_tokens: int, temp: float, key: str,
+    model_id: str,
+    prompt: str,
+    system: str | None,
+    max_tokens: int,
+    temp: float,
+    key: str,
 ) -> tuple[str, int, int]:
     client = _get_openai(key)
     messages = []
@@ -273,8 +294,12 @@ async def _call_openai(
 
 
 async def _call_groq(
-    model_id: str, prompt: str, system: str | None,
-    max_tokens: int, temp: float, key: str,
+    model_id: str,
+    prompt: str,
+    system: str | None,
+    max_tokens: int,
+    temp: float,
+    key: str,
 ) -> tuple[str, int, int]:
     client = _get_groq(key)
     messages = []
@@ -293,8 +318,12 @@ async def _call_groq(
 
 
 async def _call_gemini(
-    model_id: str, prompt: str, system: str | None,
-    max_tokens: int, temp: float, key: str,
+    model_id: str,
+    prompt: str,
+    system: str | None,
+    max_tokens: int,
+    temp: float,
+    key: str,
 ) -> tuple[str, int, int]:
     # google-genai (>= 1.0) provides a proper client object — no global state,
     # no lock needed. Concurrent calls with different keys are fully safe.
@@ -320,8 +349,12 @@ async def _call_gemini(
 
 
 async def _call_xai(
-    model_id: str, prompt: str, system: str | None,
-    max_tokens: int, temp: float, key: str,
+    model_id: str,
+    prompt: str,
+    system: str | None,
+    max_tokens: int,
+    temp: float,
+    key: str,
 ) -> tuple[str, int, int]:
     client = _get_openai(key, base_url="https://api.x.ai/v1")
     messages = []
@@ -340,6 +373,7 @@ async def _call_xai(
 
 
 # ─── Retry wrapper ────────────────────────────────────────────────────────────
+
 
 async def _call_llm_with_retry(
     model_id: str,
@@ -374,6 +408,7 @@ async def _call_llm_with_retry(
 
 # ─── Heuristic validity scorer (RDAB-calibrated) ─────────────────────────────
 
+
 def _score_response_fast(
     prompt: str,
     response_text: str,
@@ -395,23 +430,49 @@ def _score_response_fast(
 
     if not text or len(text) < 10:
         return RDABScoreCard(
-            rdab_score=0.0, correctness=0.0, code_quality=0.0,
-            efficiency=0.0, stat_validity=0.0, token_count=0, step_count=1, simulated=True,
+            rdab_score=0.0,
+            correctness=0.0,
+            code_quality=0.0,
+            efficiency=0.0,
+            stat_validity=0.0,
+            token_count=0,
+            step_count=1,
+            simulated=True,
         )
 
     text_lower = text.lower()
 
     stat_markers = [
-        "p-value", "p <", "p=", "confidence interval", "95% ci", "standard deviation",
-        "std dev", "margin of error", "statistically significant", "not significant",
-        "±", "uncertainty", "likely", "approximately", "roughly",
+        "p-value",
+        "p <",
+        "p=",
+        "confidence interval",
+        "95% ci",
+        "standard deviation",
+        "std dev",
+        "margin of error",
+        "statistically significant",
+        "not significant",
+        "±",
+        "uncertainty",
+        "likely",
+        "approximately",
+        "roughly",
     ]
     stat_score = min(1.0, sum(0.15 for m in stat_markers if m in text_lower))
 
     error_patterns = [
-        "i cannot", "i'm unable", "i don't know", "i am not able",
-        "as an ai", "i don't have access", "error:", "exception:",
-        "traceback", "syntaxerror", "typeerror",
+        "i cannot",
+        "i'm unable",
+        "i don't know",
+        "i am not able",
+        "as an ai",
+        "i don't have access",
+        "error:",
+        "exception:",
+        "traceback",
+        "syntaxerror",
+        "typeerror",
     ]
     correctness_penalty = sum(0.2 for p in error_patterns if p in text_lower)
     correctness = max(0.0, 0.75 - correctness_penalty)
@@ -421,12 +482,7 @@ def _score_response_fast(
     word_count = len(text.split())
     efficiency = 0.85 if word_count < 500 else (0.65 if word_count < 1000 else 0.45)
 
-    rdab_score = (
-        correctness * 0.50
-        + code_quality * 0.20
-        + efficiency * 0.15
-        + stat_score * 0.15
-    )
+    rdab_score = correctness * 0.50 + code_quality * 0.20 + efficiency * 0.15 + stat_score * 0.15
 
     return RDABScoreCard(
         rdab_score=round(rdab_score, 4),
@@ -441,6 +497,7 @@ def _score_response_fast(
 
 
 # ─── Auto-select best available model ────────────────────────────────────────
+
 
 def _pick_best_available_model() -> str:
     """Pick the best model we have an API key for, based on RDAB benchmark scores."""
@@ -461,6 +518,7 @@ def _pick_best_available_model() -> str:
 
 
 # ─── Core proxy handler ───────────────────────────────────────────────────────
+
 
 @router.post(
     "",
@@ -494,7 +552,7 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
     ```
     """
     call_id = getattr(request.state, "request_id", str(uuid.uuid4())[:12])
-    start_total = time.monotonic()
+    time.monotonic()
 
     model_id = req.model_id if not req.auto_select else _pick_best_available_model()
     models_to_try = [model_id] + [m for m in req.fallback_models if m != model_id]
@@ -515,6 +573,7 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
         attempts = attempt_idx + 1
 
         from evaluation.pricing import MODELS
+
         pricing = MODELS.get(current_model)
         if not pricing:
             logger.warning(f"[{call_id}] Unknown model '{current_model}', skipping")
@@ -523,8 +582,12 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
         cb = _circuit_registry.get(pricing.provider)
         cb_state = cb.state
         if not cb.allow_request():
-            logger.warning(f"[{call_id}] Circuit OPEN for '{pricing.provider}', skipping {current_model}")
-            proxy_requests_total.labels(model=current_model, provider=pricing.provider, status="circuit_open").inc()
+            logger.warning(
+                f"[{call_id}] Circuit OPEN for '{pricing.provider}', skipping {current_model}"
+            )
+            proxy_requests_total.labels(
+                model=current_model, provider=pricing.provider, status="circuit_open"
+            ).inc()
             continue
 
         call_start = time.monotonic()
@@ -551,8 +614,12 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
             last_latency = latency_ms
             cb_state = cb.state
 
-            proxy_requests_total.labels(model=current_model, provider=pricing.provider, status="success").inc()
-            proxy_latency_seconds.labels(model=current_model, provider=pricing.provider).observe(latency_ms / 1000)
+            proxy_requests_total.labels(
+                model=current_model, provider=pricing.provider, status="success"
+            ).inc()
+            proxy_latency_seconds.labels(model=current_model, provider=pricing.provider).observe(
+                latency_ms / 1000
+            )
 
             if score.rdab_score >= req.reject_threshold:
                 accepted = True
@@ -582,10 +649,12 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
                     threshold=req.reject_threshold,
                 )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             cb.record_failure()
             latency_ms = (time.monotonic() - call_start) * 1000
-            proxy_requests_total.labels(model=current_model, provider=pricing.provider, status="timeout").inc()
+            proxy_requests_total.labels(
+                model=current_model, provider=pricing.provider, status="timeout"
+            ).inc()
             logger.error(
                 f"[{call_id}] Timeout after {_LLM_TIMEOUT_SECONDS}s for {current_model} "
                 f"({_RETRY_ATTEMPTS} attempts exhausted)"
@@ -604,7 +673,7 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
                         f"All models timed out. Last timeout on {current_model} "
                         f"after {_LLM_TIMEOUT_SECONDS}s × {_RETRY_ATTEMPTS} attempts."
                     ),
-                )
+                ) from None
             continue
 
         except HTTPException:
@@ -613,7 +682,9 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
         except Exception as exc:
             cb.record_failure()
             latency_ms = (time.monotonic() - call_start) * 1000
-            proxy_requests_total.labels(model=current_model, provider=pricing.provider, status="error").inc()
+            proxy_requests_total.labels(
+                model=current_model, provider=pricing.provider, status="error"
+            ).inc()
             logger.error(f"[{call_id}] LLM call failed for {current_model}: {exc}")
 
             if cb.state == "open":
@@ -641,7 +712,7 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
                     detail=f"All models failed. Last error on {current_model}: {exc}",
-                )
+                ) from exc
             continue
 
     if last_score is None:
@@ -651,9 +722,12 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
         )
 
     from evaluation.pricing import MODELS as _MODELS
+
     final_model = fallback_model_id or model_id
     final_pricing = _MODELS.get(final_model)
-    cost_usd = final_pricing.estimate_cost(last_in_tokens, last_out_tokens) if final_pricing else 0.0
+    cost_usd = (
+        final_pricing.estimate_cost(last_in_tokens, last_out_tokens) if final_pricing else 0.0
+    )
 
     await _alert_engine.check_cost_spike(
         call_id=call_id,
@@ -663,18 +737,21 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
 
     # Offload synchronous SQLite write to thread pool — don't block event loop
     try:
-        await asyncio.to_thread(log_proxy_call, {
-            "call_id": call_id,
-            "model_id": final_model,
-            "accepted": accepted,
-            "validity_score": last_score.rdab_score,
-            "cost_usd": cost_usd,
-            "latency_ms": last_latency,
-            "input_tokens": last_in_tokens,
-            "output_tokens": last_out_tokens,
-            "fallback_used": fallback_used,
-            "attempts": attempts,
-        })
+        await asyncio.to_thread(
+            log_proxy_call,
+            {
+                "call_id": call_id,
+                "model_id": final_model,
+                "accepted": accepted,
+                "validity_score": last_score.rdab_score,
+                "cost_usd": cost_usd,
+                "latency_ms": last_latency,
+                "input_tokens": last_in_tokens,
+                "output_tokens": last_out_tokens,
+                "fallback_used": fallback_used,
+                "attempts": attempts,
+            },
+        )
     except Exception as _obs_err:
         logger.warning(f"[{call_id}] Proxy observability logging failed: {_obs_err}")
 

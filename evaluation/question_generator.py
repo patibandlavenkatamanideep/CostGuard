@@ -18,11 +18,10 @@ def generate_questions(df: pd.DataFrame, num_questions: int = 5, seed: int = 42)
     and natural-language description tasks.
     """
     rng = random.Random(seed)
-    questions: list[str] = []
 
     num_cols = df.select_dtypes(include="number").columns.tolist()
     cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
-    all_cols = df.columns.tolist()
+    df.columns.tolist()
 
     # ── Template pool ──────────────────────────────────────────────────────
     templates: list[str] = []

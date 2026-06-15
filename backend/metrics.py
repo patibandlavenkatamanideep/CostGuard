@@ -11,20 +11,17 @@ import os
 import time
 
 from fastapi import FastAPI, Request, Response
-from fastapi.routing import APIRoute
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
+    REGISTRY,
     Counter,
     Gauge,
     Histogram,
     generate_latest,
-    CollectorRegistry,
-    REGISTRY,
 )
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.logger import logger
-
 
 # ─── Prometheus metric definitions ────────────────────────────────────────────
 
@@ -111,6 +108,7 @@ circuit_breaker_state = Gauge(
 
 # ─── Prometheus scrape endpoint ───────────────────────────────────────────────
 
+
 async def metrics_endpoint(request: Request) -> Response:
     """Prometheus metrics scrape endpoint."""
     return Response(
@@ -120,6 +118,7 @@ async def metrics_endpoint(request: Request) -> Response:
 
 
 # ─── Request metrics middleware ───────────────────────────────────────────────
+
 
 class PrometheusMiddleware(BaseHTTPMiddleware):
     """Tracks request count and duration for all API endpoints."""
@@ -165,6 +164,7 @@ def _normalize_path(path: str) -> str:
 
 
 # ─── OTEL setup (optional — only if OTLP endpoint configured) ────────────────
+
 
 def setup_otel(app: FastAPI) -> None:
     """

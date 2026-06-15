@@ -24,6 +24,7 @@ from backend.logger import logger
 
 # ─── PII sanitisation ────────────────────────────────────────────────────────
 
+
 def sanitize_for_logging(response: dict) -> dict:
     """
     Strip or hash PII from a serialised EvalResponse before it reaches SQLite.
@@ -38,8 +39,7 @@ def sanitize_for_logging(response: dict) -> dict:
     ds = sanitized.get("dataset_stats")
     if isinstance(ds, dict) and "column_names" in ds:
         ds["column_names"] = [
-            hashlib.sha256(c.encode()).hexdigest()[:8]
-            for c in ds["column_names"]
+            hashlib.sha256(c.encode()).hexdigest()[:8] for c in ds["column_names"]
         ]
 
     def _redact_samples(node: Any) -> None:
@@ -58,15 +58,16 @@ def sanitize_for_logging(response: dict) -> dict:
 
 # ─── Database setup ───────────────────────────────────────────────────────────
 
-DB_PATH = Path(os.getenv("COSTGUARD_DB_PATH", "/tmp/costguard_history.db"))
+DB_PATH = Path(os.getenv("COSTGUARD_DB_PATH", "/tmp/costguard_history.db"))  # nosec B108 - default temp path; set COSTGUARD_DB_PATH to a volume in prod
 
-DRIFT_THRESHOLD_PCT = 10.0   # alert if score drops >10% from historical avg
-MIN_HISTORY_RUNS    = 3      # need at least this many prior runs to detect drift
+DRIFT_THRESHOLD_PCT = 10.0  # alert if score drops >10% from historical avg
+MIN_HISTORY_RUNS = 3  # need at least this many prior runs to detect drift
 
 
 @contextmanager
 def _db():
     import sqlite3
+
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     # WAL mode: allows concurrent readers while a writer is active.
@@ -145,27 +146,20 @@ def init_db() -> None:
                 updated_at REAL NOT NULL
             )
         """)
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_eval_model ON evaluations(recommended_model)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_eval_ts    ON evaluations(timestamp)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_proxy_ts   ON proxy_calls(timestamp)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_proxy_model ON proxy_calls(model_id)"
-        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_eval_model ON evaluations(recommended_model)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_eval_ts    ON evaluations(timestamp)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_proxy_ts   ON proxy_calls(timestamp)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_proxy_model ON proxy_calls(model_id)")
 
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
+
 def _dataset_hash(eval_result: dict[str, Any]) -> str:
     stats = eval_result.get("dataset_stats", {})
-    cols  = stats.get("column_names", [])
-    fp    = f"{stats.get('rows', 0)}:{stats.get('columns', 0)}:{','.join(cols[:8])}"
-    return hashlib.md5(fp.encode()).hexdigest()[:12]
+    cols = stats.get("column_names", [])
+    fp = f"{stats.get('rows', 0)}:{stats.get('columns', 0)}:{','.join(cols[:8])}"
+    return hashlib.md5(fp.encode(), usedforsecurity=False).hexdigest()[:12]
 
 
 def log_evaluation(eval_result: dict[str, Any]) -> None:
@@ -178,21 +172,21 @@ def log_evaluation(eval_result: dict[str, Any]) -> None:
     try:
         init_db()
         rec = eval_result.get("recommended_model", {})
-        sc  = rec.get("rdab_scorecard", {})
+        sc = rec.get("rdab_scorecard", {})
 
         row = {
-            "eval_id":           eval_result.get("eval_id", "unknown"),
-            "timestamp":         time.time(),
-            "dataset_hash":      _dataset_hash(eval_result),
+            "eval_id": eval_result.get("eval_id", "unknown"),
+            "timestamp": time.time(),
+            "dataset_hash": _dataset_hash(eval_result),
             "recommended_model": rec.get("model_id", "unknown"),
-            "rdab_score":        sc.get("rdab_score", 0.0),
-            "correctness":       sc.get("correctness", 0.0),
-            "code_quality":      sc.get("code_quality", 0.0),
-            "efficiency":        sc.get("efficiency", 0.0),
-            "stat_validity":     sc.get("stat_validity", 0.0),
-            "cost_usd":          rec.get("estimated_total_cost_usd", 0.0),
-            "eval_mode":         str(eval_result.get("eval_mode", "simulation")),
-            "simulated":         1 if sc.get("simulated", True) else 0,
+            "rdab_score": sc.get("rdab_score", 0.0),
+            "correctness": sc.get("correctness", 0.0),
+            "code_quality": sc.get("code_quality", 0.0),
+            "efficiency": sc.get("efficiency", 0.0),
+            "stat_validity": sc.get("stat_validity", 0.0),
+            "cost_usd": rec.get("estimated_total_cost_usd", 0.0),
+            "eval_mode": str(eval_result.get("eval_mode", "simulation")),
+            "simulated": 1 if sc.get("simulated", True) else 0,
         }
 
         with _db() as conn:
@@ -223,14 +217,15 @@ def log_evaluation(eval_result: dict[str, Any]) -> None:
 
 # ─── Drift detection ──────────────────────────────────────────────────────────
 
+
 def _check_and_record_drift(row: dict[str, Any]) -> None:
     """
     Compare the just-logged score against the historical average for that model.
     If it dropped >DRIFT_THRESHOLD_PCT%, record a drift event and fire an alert.
     """
-    model_id      = row["recommended_model"]
+    model_id = row["recommended_model"]
     current_score = row["rdab_score"]
-    eval_id       = row["eval_id"]
+    eval_id = row["eval_id"]
 
     try:
         with _db() as conn:
@@ -256,12 +251,12 @@ def _check_and_record_drift(row: dict[str, Any]) -> None:
             return
 
         drift_row = {
-            "timestamp":      time.time(),
-            "model_id":       model_id,
+            "timestamp": time.time(),
+            "model_id": model_id,
             "historical_avg": historical_avg,
-            "current_score":  current_score,
-            "drop_pct":       drop_pct,
-            "eval_id":        eval_id,
+            "current_score": current_score,
+            "drop_pct": drop_pct,
+            "eval_id": eval_id,
         }
         with _db() as conn:
             conn.execute(
@@ -286,6 +281,7 @@ def _check_and_record_drift(row: dict[str, Any]) -> None:
 
 
 # ─── Alerting ─────────────────────────────────────────────────────────────────
+
 
 def _send_slack_alert(
     model_id: str,
@@ -320,18 +316,17 @@ def _send_slack_alert(
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 - URL is the operator-configured webhook
             if resp.status == 200:
                 logger.info(f"[observability] Slack alert sent for {model_id}")
             else:
-                logger.warning(
-                    f"[observability] Slack returned status {resp.status}"
-                )
+                logger.warning(f"[observability] Slack returned status {resp.status}")
     except Exception as exc:
         logger.warning(f"[observability] Slack alert failed: {exc}")
 
 
 # ─── Proxy call logging ───────────────────────────────────────────────────────
+
 
 def log_proxy_call(call_data: dict) -> None:
     """Log a single proxy call to the proxy_calls table."""
@@ -399,6 +394,7 @@ def get_proxy_stats() -> dict:
 
 
 # ─── Query helpers (used by Streamlit dashboard) ──────────────────────────────
+
 
 def get_recent_evaluations(limit: int = 50) -> list[dict]:
     """Return the most recent evaluation records, newest first."""

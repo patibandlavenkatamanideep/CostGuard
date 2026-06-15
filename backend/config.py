@@ -28,8 +28,10 @@ class Settings(BaseSettings):
     def validate_secret_key(cls, v: str, info) -> str:
         if v == "dev-secret-change-in-prod":
             import os
+
             if os.getenv("APP_ENV", "production") == "production":
                 import warnings
+
                 warnings.warn(
                     "SECRET_KEY is set to the default development value. "
                     "Generate a real key: openssl rand -hex 32",
@@ -38,7 +40,8 @@ class Settings(BaseSettings):
         return v
 
     # ── API ─────────────────────────────────────────────────────────────────
-    api_host: str = "0.0.0.0"
+    # Bind all interfaces — required for containerized/PaaS deploys (Docker, Railway).
+    api_host: str = "0.0.0.0"  # nosec B104
     api_port: int = 8000
     cors_origins: list[str] = ["http://localhost:8501"]
 
@@ -48,11 +51,11 @@ class Settings(BaseSettings):
     # ── LLM Provider Keys (mirrors RealDataAgentBench provider support) ─────
     # These are server-side keys (set via env / .env file).
     # Per-request session keys from the UI are handled separately in SessionKeys.
-    anthropic_api_key: str | None = None   # Claude Sonnet 4.6, Opus 4.6, Haiku 4.5
-    openai_api_key: str | None = None      # GPT-5, GPT-4.1, GPT-4o, GPT-4o-mini
-    groq_api_key: str | None = None        # Llama 3.3-70B, Mixtral 8x7B
-    xai_api_key: str | None = None         # Grok-3, Grok-3-mini, Grok-3-fast
-    gemini_api_key: str | None = None      # Gemini 2.5 Pro/Flash
+    anthropic_api_key: str | None = None  # Claude Sonnet 4.6, Opus 4.6, Haiku 4.5
+    openai_api_key: str | None = None  # GPT-5, GPT-4.1, GPT-4o, GPT-4o-mini
+    groq_api_key: str | None = None  # Llama 3.3-70B, Mixtral 8x7B
+    xai_api_key: str | None = None  # Grok-3, Grok-3-mini, Grok-3-fast
+    gemini_api_key: str | None = None  # Gemini 2.5 Pro/Flash
 
     # ── Evaluation ───────────────────────────────────────────────────────────
     eval_max_rows: int = 500
@@ -62,7 +65,7 @@ class Settings(BaseSettings):
 
     # ── Upload ──────────────────────────────────────────────────────────────
     max_upload_mb: int = 50
-    upload_dir: str = "/tmp/costguard"
+    upload_dir: str = "/tmp/costguard"  # nosec B108 - intentional temp dir; override via UPLOAD_DIR
 
     @field_validator("cors_origins", mode="before")
     @classmethod

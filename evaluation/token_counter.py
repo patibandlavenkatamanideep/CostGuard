@@ -6,8 +6,6 @@ fallback so the app works even without an API key.
 
 from __future__ import annotations
 
-import re
-
 from backend.logger import logger
 
 try:

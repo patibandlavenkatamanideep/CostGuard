@@ -2,25 +2,25 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class EvalStatus(str, Enum):
+class EvalStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
 
 
-class EvalMode(str, Enum):
+class EvalMode(StrEnum):
     LIVE = "live"
     SIMULATION = "simulation"
 
 
-class ModelTier(str, Enum):
+class ModelTier(StrEnum):
     PREMIUM = "premium"
     BALANCED = "balanced"
     ECONOMY = "economy"
@@ -41,6 +41,7 @@ class RDABScoreCard(BaseModel):
     Four-dimensional score from RealDataAgentBench evaluation.
     Mirrors realdataagentbench.scoring.ScoreCard.
     """
+
     rdab_score: float = Field(ge=0, le=1, description="Composite RDAB score (weighted)")
     correctness: float = Field(ge=0, le=1, description="Ground-truth accuracy (50% weight)")
     code_quality: float = Field(ge=0, le=1, description="Code pattern quality (20% weight)")
@@ -90,6 +91,7 @@ class SessionKeys(BaseModel):
     Per-request API keys supplied by the user via the UI.
     Never persisted — only used for the duration of a single evaluation call.
     """
+
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     groq_api_key: str | None = None
@@ -106,9 +108,7 @@ class SessionKeys(BaseModel):
             "gemini_api_key": "GEMINI_API_KEY",
         }
         return {
-            env_var: getattr(self, attr)
-            for attr, env_var in mapping.items()
-            if getattr(self, attr)
+            env_var: getattr(self, attr) for attr, env_var in mapping.items() if getattr(self, attr)
         }
 
     def live_providers(self) -> list[str]:
@@ -160,7 +160,9 @@ class HealthResponse(BaseModel):
     environment: str
     rdab_available: bool = Field(default=False, description="Whether RDAB package is importable")
     db_ok: bool = Field(default=False, description="Whether the observability DB is reachable")
-    circuit_breakers: dict = Field(default_factory=dict, description="Circuit breaker states per provider")
+    circuit_breakers: dict = Field(
+        default_factory=dict, description="Circuit breaker states per provider"
+    )
 
 
 class ErrorResponse(BaseModel):

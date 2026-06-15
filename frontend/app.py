@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import sys
 from pathlib import Path
@@ -17,7 +16,7 @@ _PROJECT_ROOT = str(Path(__file__).parent.parent)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from backend.models import EvalMode, EvalResponse, SessionKeys  # noqa: E402
+from backend.models import EvalResponse, SessionKeys  # noqa: E402
 from evaluation.engine import run_evaluation  # noqa: E402
 from evaluation.observability import (  # noqa: E402
     get_model_averages,
@@ -25,7 +24,6 @@ from evaluation.observability import (  # noqa: E402
     get_recent_evaluations,
     get_total_eval_count,
 )
-
 
 # ─── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -36,7 +34,8 @@ st.set_page_config(
 )
 
 # ─── Design system — 2-colour palette: #111827 (dark) + #4f46e5 (indigo) ──────
-st.markdown("""
+st.markdown(
+    """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 *,*::before,*::after{box-sizing:border-box}
@@ -230,10 +229,13 @@ button[data-baseweb="tab"][aria-selected="true"] {
     background:#e5e7eb !important;
 }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _fmt_cost(usd: float) -> str:
     if usd == 0:
@@ -266,35 +268,41 @@ def _run_evaluation_sync(
 
 
 def _make_sample_ecommerce() -> bytes:
-    df = pd.DataFrame({
-        "customer_id":     range(1, 101),
-        "age":             [25 + i % 45 for i in range(100)],
-        "annual_spend_usd":[500 + (i * 137 % 9500) for i in range(100)],
-        "region":          [["North", "South", "East", "West"][i % 4] for i in range(100)],
-        "churn":           [i % 5 == 0 for i in range(100)],
-    })
+    df = pd.DataFrame(
+        {
+            "customer_id": range(1, 101),
+            "age": [25 + i % 45 for i in range(100)],
+            "annual_spend_usd": [500 + (i * 137 % 9500) for i in range(100)],
+            "region": [["North", "South", "East", "West"][i % 4] for i in range(100)],
+            "churn": [i % 5 == 0 for i in range(100)],
+        }
+    )
     return df.to_csv(index=False).encode()
 
 
 def _make_sample_sales() -> bytes:
-    df = pd.DataFrame({
-        "deal_id":   range(1, 51),
-        "value_usd": [10_000 + i * 4321 % 200_000 for i in range(50)],
-        "stage":     [["Discovery", "Proposal", "Negotiation", "Closed"][i % 4] for i in range(50)],
-        "rep":       [f"Rep_{i % 8}" for i in range(50)],
-        "days_open": [5 + i % 90 for i in range(50)],
-    })
+    df = pd.DataFrame(
+        {
+            "deal_id": range(1, 51),
+            "value_usd": [10_000 + i * 4321 % 200_000 for i in range(50)],
+            "stage": [["Discovery", "Proposal", "Negotiation", "Closed"][i % 4] for i in range(50)],
+            "rep": [f"Rep_{i % 8}" for i in range(50)],
+            "days_open": [5 + i % 90 for i in range(50)],
+        }
+    )
     return df.to_csv(index=False).encode()
 
 
 def _make_sample_products() -> bytes:
-    df = pd.DataFrame({
-        "product":  [f"SKU-{i:04d}" for i in range(80)],
-        "category": [["Electronics", "Apparel", "Home", "Sports"][i % 4] for i in range(80)],
-        "price":    [9.99 + i * 7.77 % 500 for i in range(80)],
-        "rating":   [3.0 + (i % 20) / 10 for i in range(80)],
-        "reviews":  [i * 13 % 2000 for i in range(80)],
-    })
+    df = pd.DataFrame(
+        {
+            "product": [f"SKU-{i:04d}" for i in range(80)],
+            "category": [["Electronics", "Apparel", "Home", "Sports"][i % 4] for i in range(80)],
+            "price": [9.99 + i * 7.77 % 500 for i in range(80)],
+            "rating": [3.0 + (i % 20) / 10 for i in range(80)],
+            "reviews": [i * 13 % 2000 for i in range(80)],
+        }
+    )
     return df.to_csv(index=False).encode()
 
 
@@ -307,11 +315,17 @@ if "show_live_form" not in st.session_state:
     st.session_state["show_live_form"] = False
 
 _providers = [
-    ("Anthropic", "sb_anthropic", "sk-ant-...", "https://console.anthropic.com/settings/keys",  "Claude models"),
-    ("OpenAI",    "sb_openai",    "sk-...",      "https://platform.openai.com/api-keys",         "GPT models"),
-    ("Groq",      "sb_groq",      "gsk_...",     "https://console.groq.com/keys",                "Llama models"),
-    ("Google",    "sb_gemini",    "AIza...",     "https://aistudio.google.com/apikey",           "Gemini models"),
-    ("xAI",       "sb_xai",       "xai-...",     "https://console.x.ai/",                        "Grok models"),
+    (
+        "Anthropic",
+        "sb_anthropic",
+        "sk-ant-...",
+        "https://console.anthropic.com/settings/keys",
+        "Claude models",
+    ),
+    ("OpenAI", "sb_openai", "sk-...", "https://platform.openai.com/api-keys", "GPT models"),
+    ("Groq", "sb_groq", "gsk_...", "https://console.groq.com/keys", "Llama models"),
+    ("Google", "sb_gemini", "AIza...", "https://aistudio.google.com/apikey", "Gemini models"),
+    ("xAI", "sb_xai", "xai-...", "https://console.x.ai/", "Grok models"),
 ]
 
 # Determine live state before rendering sidebar
@@ -338,7 +352,10 @@ with st.sidebar:
 
     st.markdown('<p class="sb-section">Evaluation Depth</p>', unsafe_allow_html=True)
     num_questions = st.slider(
-        "Questions", min_value=1, max_value=10, value=5,
+        "Questions",
+        min_value=1,
+        max_value=10,
+        value=5,
         help="More questions = more accurate benchmark, slightly longer runtime.",
         label_visibility="collapsed",
     )
@@ -358,13 +375,17 @@ with st.sidebar:
         # Show which providers are connected
         for _pname, _pkey, _, _plink, _pmodels in _providers:
             _is_set = bool(st.session_state[_pkey].strip())
-            _dot = '<span class="sb-dot-live"></span>' if _is_set else '<span class="sb-dot-sim"></span>'
+            _dot = (
+                '<span class="sb-dot-live"></span>'
+                if _is_set
+                else '<span class="sb-dot-sim"></span>'
+            )
             _status = "connected" if _is_set else "not set — simulation"
             st.markdown(
                 f'<div class="sb-provider">'
                 f'<span class="sb-provider-label">{_dot}{_pname}</span>'
                 f'<span style="font-size:.68rem;color:{"#4f46e5" if _is_set else "#9ca3af"}">{_status}</span>'
-                f'</div>',
+                f"</div>",
                 unsafe_allow_html=True,
             )
 
@@ -377,12 +398,16 @@ with st.sidebar:
             st.markdown('<p class="sb-section">Update keys</p>', unsafe_allow_html=True)
             for _pname, _pkey, _placeholder, _plink, _pmodels in _providers:
                 _is_set = bool(st.session_state[_pkey].strip())
-                _dot = '<span class="sb-dot-live"></span>' if _is_set else '<span class="sb-dot-sim"></span>'
+                _dot = (
+                    '<span class="sb-dot-live"></span>'
+                    if _is_set
+                    else '<span class="sb-dot-sim"></span>'
+                )
                 st.markdown(
                     f'<div class="sb-provider">'
                     f'<span class="sb-provider-label">{_dot}{_pname}</span>'
                     f'<a class="sb-provider-link" href="{_plink}" target="_blank">Get key →</a>'
-                    f'</div>',
+                    f"</div>",
                     unsafe_allow_html=True,
                 )
                 st.text_input(
@@ -393,7 +418,9 @@ with st.sidebar:
                     label_visibility="collapsed",
                 )
 
-        if st.button("Clear all keys — revert to Simulation", use_container_width=True, type="secondary"):
+        if st.button(
+            "Clear all keys — revert to Simulation", use_container_width=True, type="secondary"
+        ):
             for _k in _KEY_FIELDS:
                 st.session_state[_k] = ""
             st.session_state["show_live_form"] = False
@@ -414,7 +441,9 @@ with st.sidebar:
                 st.session_state["show_live_form"] = True
                 st.rerun()
         else:
-            st.markdown('<p class="sb-section">Enter at least one API key</p>', unsafe_allow_html=True)
+            st.markdown(
+                '<p class="sb-section">Enter at least one API key</p>', unsafe_allow_html=True
+            )
             st.caption("One key is enough. Other providers will fall back to simulation.")
 
             for _pname, _pkey, _placeholder, _plink, _pmodels in _providers:
@@ -422,7 +451,7 @@ with st.sidebar:
                     f'<div class="sb-provider">'
                     f'<span class="sb-provider-label">{_pname}</span>'
                     f'<a class="sb-provider-link" href="{_plink}" target="_blank">Get key →</a>'
-                    f'</div>',
+                    f"</div>",
                     unsafe_allow_html=True,
                 )
                 st.text_input(
@@ -450,11 +479,14 @@ with st.sidebar:
 
     st.divider()
     st.markdown('<p class="sb-section">Models Covered</p>', unsafe_allow_html=True)
-    st.caption("Claude Sonnet · Opus · Haiku\nGPT-5 · 4.1 · 4o · 4o-mini\nGemini 2.5 Pro · Flash\nLlama 3.3 70B · Grok-3")
+    st.caption(
+        "Claude Sonnet · Opus · Haiku\nGPT-5 · 4.1 · 4o · 4o-mini\nGemini 2.5 Pro · Flash\nLlama 3.3 70B · Grok-3"
+    )
 
 
 # ─── Hero ─────────────────────────────────────────────────────────────────────
-st.markdown("""
+st.markdown(
+    """
 <div class="hero">
   <div class="hero-title">CostGuard</div>
   <p class="hero-sub">
@@ -468,7 +500,9 @@ st.markdown("""
     <span class="hero-pill">Self-host with Docker</span>
   </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # ─── Upload + How it works ────────────────────────────────────────────────────
@@ -496,7 +530,8 @@ with col_up:
 
 with col_how:
     st.markdown("##### How it works")
-    st.markdown("""
+    st.markdown(
+        """
 <div class="steps">
   <div class="step">
     <div class="step-num">1</div>
@@ -515,7 +550,9 @@ with col_how:
     <div><span class="step-label">Deploy</span><span class="step-desc">Copy the ready config</span></div>
   </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+        unsafe_allow_html=True,
+    )
     st.caption(
         "⏱ **Simulation mode:** ~5–15 seconds  ·  "
         "**Live mode (with API keys):** 1–3 minutes  \n"
@@ -537,12 +574,15 @@ if active_file:
     st.caption(f"**{filename}** — {size_str}")
 
     if not any_key:
-        st.markdown("""
+        st.markdown(
+            """
 <div style="background:#eef2ff;border:1px solid #c7d2fe;border-left:3px solid #4f46e5;border-radius:8px;padding:.75rem 1rem;margin:.5rem 0;font-size:.82rem;color:#3730a3">
   <strong>Simulation Mode active.</strong>
   Scores are from the RDAB benchmark leaderboard — not from live inference on your data.<br>
   Enter at least one API key in the sidebar to run real models on your actual file.
-</div>""", unsafe_allow_html=True)
+</div>""",
+            unsafe_allow_html=True,
+        )
 
     mode_label = (
         "Running live benchmark across 12 models — this takes 1–3 minutes…"
@@ -564,28 +604,33 @@ if active_file:
                 st.error(f"Evaluation failed: {exc}")
                 st.stop()
 else:
-    st.markdown("""
+    st.markdown(
+        """
 <div class="empty">
   <div class="empty-icon">📂</div>
   <div class="empty-title">No dataset loaded yet</div>
   <div class="empty-sub">Upload a CSV or Parquet file above, or click one of the sample datasets to get started.</div>
 </div>
-""", unsafe_allow_html=True)
+""",
+        unsafe_allow_html=True,
+    )
 
 
 # ─── Results ──────────────────────────────────────────────────────────────────
 if result := st.session_state.get("result"):
-    rec   = result["recommended_model"]
+    rec = result["recommended_model"]
     stats = result["dataset_stats"]
-    sc    = rec["rdab_scorecard"]
-    mode  = result.get("eval_mode", "simulation")
+    sc = rec["rdab_scorecard"]
+    mode = result.get("eval_mode", "simulation")
     live_providers = result.get("live_providers", [])
 
     # ── Compute savings vs most expensive alternative ────────────────────────
     _others = [r for r in result["results"] if r["model_id"] != rec["model_id"]]
     _priciest = max(_others, key=lambda r: r["estimated_total_cost_usd"]) if _others else None
     if _priciest and _priciest["estimated_total_cost_usd"] > 0:
-        _savings_pct = (1 - rec["estimated_total_cost_usd"] / _priciest["estimated_total_cost_usd"]) * 100
+        _savings_pct = (
+            1 - rec["estimated_total_cost_usd"] / _priciest["estimated_total_cost_usd"]
+        ) * 100
         _savings_label = f"vs {_priciest['display_name']}"
     else:
         _savings_pct = 0.0
@@ -603,21 +648,22 @@ if result := st.session_state.get("result"):
 
     # ── Result hero ──────────────────────────────────────────────────────────
     st.markdown(_mode_pill, unsafe_allow_html=True)
-    st.markdown(f"""
+    st.markdown(
+        f"""
 <div class="result-hero">
   <div class="rh-eyebrow">Recommended Model</div>
-  <div class="rh-model">{rec['display_name']}</div>
-  <div class="rh-meta">{rec['provider'].upper()} &nbsp;·&nbsp; {rec['tier'].upper()} TIER &nbsp;·&nbsp; {rec['latency_ms']:.0f} ms avg latency</div>
+  <div class="rh-model">{rec["display_name"]}</div>
+  <div class="rh-meta">{rec["provider"].upper()} &nbsp;·&nbsp; {rec["tier"].upper()} TIER &nbsp;·&nbsp; {rec["latency_ms"]:.0f} ms avg latency</div>
   <div class="rh-stats">
     <div class="rh-stat">
       <div class="rh-stat-label">RDAB Score</div>
-      <div class="rh-stat-value">{sc['rdab_score']:.0%}</div>
+      <div class="rh-stat-value">{sc["rdab_score"]:.0%}</div>
       <div class="rh-stat-sub">Composite benchmark — 12 models</div>
     </div>
     <div class="rh-stat">
       <div class="rh-stat-label">Cost per Run</div>
-      <div class="rh-stat-value">{_fmt_cost(rec['estimated_total_cost_usd'])}</div>
-      <div class="rh-stat-sub">{rec['estimated_tokens_input']:,} input tokens</div>
+      <div class="rh-stat-value">{_fmt_cost(rec["estimated_total_cost_usd"])}</div>
+      <div class="rh-stat-sub">{rec["estimated_tokens_input"]:,} input tokens</div>
     </div>
     <div class="rh-stat">
       <div class="rh-stat-label">Potential Savings</div>
@@ -631,7 +677,9 @@ if result := st.session_state.get("result"):
     </div>
   </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+        unsafe_allow_html=True,
+    )
 
     # ── 4-Dimension Scorecard ────────────────────────────────────────────────
     _sim_note = " · Simulated" if sc.get("simulated") else " · Live"
@@ -640,10 +688,10 @@ if result := st.session_state.get("result"):
         unsafe_allow_html=True,
     )
     _dims = [
-        ("Correctness",  sc["correctness"],  "50% weight — answer accuracy"),
+        ("Correctness", sc["correctness"], "50% weight — answer accuracy"),
         ("Code Quality", sc["code_quality"], "20% weight — vectorisation & naming"),
-        ("Efficiency",   sc["efficiency"],   "15% weight — token & step budget"),
-        ("Stat Validity",sc["stat_validity"],"15% weight — p-values & rigour"),
+        ("Efficiency", sc["efficiency"], "15% weight — token & step budget"),
+        ("Stat Validity", sc["stat_validity"], "15% weight — p-values & rigour"),
     ]
     _sc_items = ""
     for _name, _val, _hint in _dims:
@@ -672,11 +720,13 @@ if result := st.session_state.get("result"):
     # ── Dataset overview ─────────────────────────────────────────────────────
     with st.expander("📂  Dataset Overview", expanded=False):
         d1, d2, d3, d4 = st.columns(4)
-        d1.metric("Rows",      f"{stats['rows']:,}")
-        d2.metric("Columns",   stats["columns"])
-        d3.metric("Missing",   f"{stats['missing_pct']:.1f}%")
+        d1.metric("Rows", f"{stats['rows']:,}")
+        d2.metric("Columns", stats["columns"])
+        d3.metric("Missing", f"{stats['missing_pct']:.1f}%")
         d4.metric("File Size", f"{stats['file_size_kb']:.0f} KB")
-        st.caption(f"Format: **{stats['file_format']}**  ·  Columns: {', '.join(stats['column_names'][:12])}")
+        st.caption(
+            f"Format: **{stats['file_format']}**  ·  Columns: {', '.join(stats['column_names'][:12])}"
+        )
 
     # ── Model comparison charts ──────────────────────────────────────────────
     st.markdown('<div class="sh"><h3>All Models — Comparison</h3></div>', unsafe_allow_html=True)
@@ -684,34 +734,34 @@ if result := st.session_state.get("result"):
     results_raw = result["results"]
     for r in results_raw:
         sc_r = r.get("rdab_scorecard", {})
-        r["rdab_score"]   = sc_r.get("rdab_score", 0)
-        r["correctness"]  = sc_r.get("correctness", 0)
+        r["rdab_score"] = sc_r.get("rdab_score", 0)
+        r["correctness"] = sc_r.get("correctness", 0)
         r["code_quality"] = sc_r.get("code_quality", 0)
-        r["efficiency"]   = sc_r.get("efficiency", 0)
-        r["stat_validity"]= sc_r.get("stat_validity", 0)
-        r["simulated"]    = sc_r.get("simulated", True)
+        r["efficiency"] = sc_r.get("efficiency", 0)
+        r["stat_validity"] = sc_r.get("stat_validity", 0)
+        r["simulated"] = sc_r.get("simulated", True)
     df_models = pd.DataFrame(results_raw)
 
     TIER_COLORS = {"premium": "#4f46e5", "balanced": "#6366f1", "economy": "#818cf8"}
-    CHART_BG    = "#ffffff"
-    GRID_COLOR  = "#f3f4f6"
+    CHART_BG = "#ffffff"
+    GRID_COLOR = "#f3f4f6"
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "Score vs Cost",
-        "Radar — Top 5",
-        "Latency",
-        "Full Table",
-        "Model Outputs",
-    ])
-
-
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        [
+            "Score vs Cost",
+            "Radar — Top 5",
+            "Latency",
+            "Full Table",
+            "Model Outputs",
+        ]
+    )
 
     with tab1:
         # Clip zero costs so log scale doesn't break; use a realistic floor ($0.000001)
         _COST_FLOOR = 1e-6
         df_plot = df_models.copy()
         df_plot["plot_cost"] = df_plot["estimated_total_cost_usd"].clip(lower=_COST_FLOOR)
-        _rec_cost  = max(rec["estimated_total_cost_usd"], _COST_FLOOR)
+        _rec_cost = max(rec["estimated_total_cost_usd"], _COST_FLOOR)
         _rec_score = rec["rdab_scorecard"]["rdab_score"]
 
         fig = px.scatter(
@@ -736,22 +786,26 @@ if result := st.session_state.get("result"):
         )
         # Explicit star marker so the recommended model is always visible
         # even if the annotation arrow lands slightly off due to floating-point.
-        fig.add_trace(go.Scatter(
-            x=[_rec_cost],
-            y=[_rec_score],
-            mode="markers+text",
-            marker=dict(symbol="star", size=20, color="#6366f1",
-                        line=dict(color="#ffffff", width=1.5)),
-            text=["★ Recommended"],
-            textposition="top center",
-            textfont=dict(size=12, color="#6366f1", family="Inter"),
-            name="Recommended",
-            showlegend=True,
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=[_rec_cost],
+                y=[_rec_score],
+                mode="markers+text",
+                marker=dict(
+                    symbol="star", size=20, color="#6366f1", line=dict(color="#ffffff", width=1.5)
+                ),
+                text=["★ Recommended"],
+                textposition="top center",
+                textfont=dict(size=12, color="#6366f1", family="Inter"),
+                name="Recommended",
+                showlegend=True,
+            )
+        )
         fig.update_xaxes(
             type="log",
             title="Cost per Run (USD) — log scale",
-            gridcolor=GRID_COLOR, zeroline=False,
+            gridcolor=GRID_COLOR,
+            zeroline=False,
             title_font=dict(size=12, color="#111827"),
             tickfont=dict(size=11, color="#6b7280"),
             tickvals=[1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1],
@@ -759,17 +813,23 @@ if result := st.session_state.get("result"):
         )
         fig.update_layout(
             height=460,
-            plot_bgcolor=CHART_BG, paper_bgcolor=CHART_BG,
+            plot_bgcolor=CHART_BG,
+            paper_bgcolor=CHART_BG,
             font=dict(family="Inter", color="#111827"),
             title=dict(font=dict(size=13, color="#111827")),
             yaxis=dict(
-                gridcolor=GRID_COLOR, zeroline=False,
+                gridcolor=GRID_COLOR,
+                zeroline=False,
                 title_font=dict(size=12, color="#111827"),
                 tickfont=dict(size=11, color="#6b7280"),
                 tickformat=".0%",
             ),
             legend=dict(
-                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
                 font=dict(size=11, color="#111827"),
             ),
             margin=dict(l=0, r=0, t=50, b=0),
@@ -777,26 +837,34 @@ if result := st.session_state.get("result"):
         st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
-        top5   = df_models.nlargest(5, "rdab_score")
-        cats   = ["Correctness", "Code Quality", "Efficiency", "Stat Validity"]
+        top5 = df_models.nlargest(5, "rdab_score")
+        cats = ["Correctness", "Code Quality", "Efficiency", "Stat Validity"]
         colors = ["#4f46e5", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444"]
-        radar  = go.Figure()
+        radar = go.Figure()
         for i, (_, row) in enumerate(top5.iterrows()):
-            vals = [row["correctness"], row["code_quality"], row["efficiency"], row["stat_validity"]]
-            radar.add_trace(go.Scatterpolar(
-                r=vals + [vals[0]],
-                theta=cats + [cats[0]],
-                fill="toself",
-                name=row["display_name"],
-                line_color=colors[i % len(colors)],
-                fillcolor=colors[i % len(colors)],
-                opacity=0.55,
-                line_width=3,
-            ))
+            vals = [
+                row["correctness"],
+                row["code_quality"],
+                row["efficiency"],
+                row["stat_validity"],
+            ]
+            radar.add_trace(
+                go.Scatterpolar(
+                    r=vals + [vals[0]],
+                    theta=cats + [cats[0]],
+                    fill="toself",
+                    name=row["display_name"],
+                    line_color=colors[i % len(colors)],
+                    fillcolor=colors[i % len(colors)],
+                    opacity=0.55,
+                    line_width=3,
+                )
+            )
         radar.update_layout(
             polar=dict(
                 radialaxis=dict(
-                    visible=True, range=[0, 1],
+                    visible=True,
+                    range=[0, 1],
                     tickfont=dict(size=10, color="#6b7280"),
                     gridcolor=GRID_COLOR,
                     tickformat=".0%",
@@ -806,20 +874,42 @@ if result := st.session_state.get("result"):
                 ),
                 bgcolor=CHART_BG,
             ),
-            title=dict(text="4-Dimensional Scorecard — Top 5 Models", font=dict(size=13, color="#111827")),
+            title=dict(
+                text="4-Dimensional Scorecard — Top 5 Models", font=dict(size=13, color="#111827")
+            ),
             height=480,
             paper_bgcolor=CHART_BG,
             font=dict(family="Inter", color="#111827"),
             legend=dict(
-                orientation="h", yanchor="top", y=-0.05, xanchor="center", x=0.5,
+                orientation="h",
+                yanchor="top",
+                y=-0.05,
+                xanchor="center",
+                x=0.5,
                 font=dict(size=11, color="#111827"),
             ),
             margin=dict(l=10, r=10, t=50, b=10),
         )
         st.plotly_chart(radar, use_container_width=True)
 
-        top5_tbl = top5[["display_name", "rdab_score", "correctness", "code_quality", "efficiency", "stat_validity"]].copy()
-        top5_tbl.columns = ["Model", "RDAB", "Correctness", "Code Quality", "Efficiency", "Stat Validity"]
+        top5_tbl = top5[
+            [
+                "display_name",
+                "rdab_score",
+                "correctness",
+                "code_quality",
+                "efficiency",
+                "stat_validity",
+            ]
+        ].copy()
+        top5_tbl.columns = [
+            "Model",
+            "RDAB",
+            "Correctness",
+            "Code Quality",
+            "Efficiency",
+            "Stat Validity",
+        ]
         for col in top5_tbl.columns[1:]:
             top5_tbl[col] = top5_tbl[col].map("{:.1%}".format)
         st.dataframe(top5_tbl, use_container_width=True, hide_index=True)
@@ -827,7 +917,8 @@ if result := st.session_state.get("result"):
     with tab3:
         fig2 = px.bar(
             df_models.sort_values("latency_ms"),
-            x="display_name", y="latency_ms",
+            x="display_name",
+            y="latency_ms",
             color="tier",
             color_discrete_map=TIER_COLORS,
             title="Estimated Response Latency per Model",
@@ -841,11 +932,13 @@ if result := st.session_state.get("result"):
         )
         fig2.update_layout(
             height=420,
-            plot_bgcolor=CHART_BG, paper_bgcolor=CHART_BG,
+            plot_bgcolor=CHART_BG,
+            paper_bgcolor=CHART_BG,
             font=dict(family="Inter", color="#111827"),
             title=dict(font=dict(size=13, color="#111827")),
             xaxis=dict(
-                tickangle=-35, gridcolor=GRID_COLOR,
+                tickangle=-35,
+                gridcolor=GRID_COLOR,
                 tickfont=dict(size=11, color="#111827"),
                 title_font=dict(size=12, color="#111827"),
             ),
@@ -867,19 +960,39 @@ if result := st.session_state.get("result"):
             "Provide API keys for Live Mode to get full benchmark runs.",
             icon="ℹ️",
         )
-        tbl = df_models[[
-            "display_name", "provider", "tier",
-            "rdab_score", "correctness", "code_quality", "efficiency", "stat_validity",
-            "latency_ms", "estimated_total_cost_usd",
-            "input_cost_per_1k", "output_cost_per_1k",
-            "simulated",
-        ]].copy()
+        tbl = df_models[
+            [
+                "display_name",
+                "provider",
+                "tier",
+                "rdab_score",
+                "correctness",
+                "code_quality",
+                "efficiency",
+                "stat_validity",
+                "latency_ms",
+                "estimated_total_cost_usd",
+                "input_cost_per_1k",
+                "output_cost_per_1k",
+                "simulated",
+            ]
+        ].copy()
         tbl["Mode"] = tbl["simulated"].map(lambda s: "Simulation" if s else "Live")
         tbl = tbl.drop(columns=["simulated"])
         tbl.columns = [
-            "Model", "Provider", "Tier",
-            "RDAB", "Correctness", "Code Quality", "Efficiency", "Stat Validity",
-            "Latency (ms)", "Cost/Run ($)", "Input $/1K", "Output $/1K", "Mode",
+            "Model",
+            "Provider",
+            "Tier",
+            "RDAB",
+            "Correctness",
+            "Code Quality",
+            "Efficiency",
+            "Stat Validity",
+            "Latency (ms)",
+            "Cost/Run ($)",
+            "Input $/1K",
+            "Output $/1K",
+            "Mode",
         ]
         for col in ["RDAB", "Correctness", "Code Quality", "Efficiency", "Stat Validity"]:
             tbl[col] = tbl[col].map("{:.1%}".format)
@@ -891,8 +1004,8 @@ if result := st.session_state.get("result"):
             hide_index=True,
             column_config={
                 "Provider": st.column_config.TextColumn(width="small"),
-                "Tier":     st.column_config.TextColumn(width="small"),
-                "Mode":     st.column_config.TextColumn(width="small"),
+                "Tier": st.column_config.TextColumn(width="small"),
+                "Mode": st.column_config.TextColumn(width="small"),
             },
         )
 
@@ -900,7 +1013,8 @@ if result := st.session_state.get("result"):
         _questions = result.get("questions_asked", [])
         _live_results = [r for r in result["results"] if r.get("actual_output")]
         if not _live_results:
-            st.markdown("""
+            st.markdown(
+                """
 <div class="empty">
   <div class="empty-icon">💬</div>
   <div class="empty-title">No actual outputs available</div>
@@ -909,7 +1023,9 @@ if result := st.session_state.get("result"):
     Add at least one provider API key in the sidebar and re-run to see what each model actually says about your data.
   </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+                unsafe_allow_html=True,
+            )
         else:
             st.markdown(
                 f'<div class="sh"><h3>What each model said — {len(_live_results)} live model{"s" if len(_live_results) != 1 else ""}</h3></div>',
@@ -920,11 +1036,19 @@ if result := st.session_state.get("result"):
                     for _qi, _q in enumerate(_questions, 1):
                         st.markdown(f"**{_qi}.** {_q}")
 
-            _sorted_live = sorted(_live_results, key=lambda r: r.get("rdab_scorecard", {}).get("rdab_score", 0), reverse=True)
+            _sorted_live = sorted(
+                _live_results,
+                key=lambda r: r.get("rdab_scorecard", {}).get("rdab_score", 0),
+                reverse=True,
+            )
             for _lr in _sorted_live:
                 _lr_sc = _lr.get("rdab_scorecard", {})
                 _lr_conf = _lr.get("confidence_score", 0.5)
-                _lr_conf_cls = "conf-high" if _lr_conf >= 0.70 else ("conf-mid" if _lr_conf >= 0.50 else "conf-low")
+                _lr_conf_cls = (
+                    "conf-high"
+                    if _lr_conf >= 0.70
+                    else ("conf-mid" if _lr_conf >= 0.50 else "conf-low")
+                )
                 with st.expander(
                     f"{_lr['display_name']}  ·  RDAB {_lr_sc.get('rdab_score', 0):.0%}  ·  {_fmt_cost(_lr['estimated_total_cost_usd'])}/run",
                     expanded=(_lr["model_id"] == rec["model_id"]),
@@ -963,7 +1087,8 @@ if result := st.session_state.get("result"):
 
 
 # ─── Case Study ──────────────────────────────────────────────────────────────
-st.markdown("""
+st.markdown(
+    """
 <div class="casestudy">
   <div class="cs-eyebrow">Real Case Study · CostGuard on CostGuard</div>
   <div class="cs-title">GPT-4.1 over GPT-5 — same quality, 87% cheaper</div>
@@ -995,21 +1120,24 @@ st.markdown("""
     </div>
   </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # ─── History & Alerts ────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown(
-    '<div class="sh">'
-    '<h3>History &amp; Alerts</h3></div>',
+    '<div class="sh"><h3>History &amp; Alerts</h3></div>',
     unsafe_allow_html=True,
 )
-st.caption("Every evaluation is logged locally. Score drift (>10% drop from average) triggers an alert.")
+st.caption(
+    "Every evaluation is logged locally. Score drift (>10% drop from average) triggers an alert."
+)
 
-_proxy_tab, _hist_tab, _drift_tab, _avg_tab, _spend_tab = st.tabs([
-    "Proxy Monitor", "Recent Evaluations", "Drift Events", "Model Averages", "Spend Monitor"
-])
+_proxy_tab, _hist_tab, _drift_tab, _avg_tab, _spend_tab = st.tabs(
+    ["Proxy Monitor", "Recent Evaluations", "Drift Events", "Model Averages", "Spend Monitor"]
+)
 
 with _proxy_tab:
     st.markdown("#### Proxy Monitor — Real-Time Guard Statistics")
@@ -1020,20 +1148,22 @@ with _proxy_tab:
 
     # ── Import proxy helpers ──────────────────────────────────────────────────
     try:
-        from evaluation.observability import get_recent_proxy_calls, get_proxy_stats
+        from evaluation.observability import get_proxy_stats, get_recent_proxy_calls
 
         _proxy_stats = get_proxy_stats()
         _proxy_calls = get_recent_proxy_calls(limit=100)
 
         # ── Aggregate stats row ───────────────────────────────────────────────
-        _total_calls  = _proxy_stats.get("total_calls", 0) or 0
+        _total_calls = _proxy_stats.get("total_calls", 0) or 0
         _avg_validity = _proxy_stats.get("avg_validity") or 0.0
-        _avg_cost     = _proxy_stats.get("avg_cost_usd") or 0.0
-        _avg_latency  = _proxy_stats.get("avg_latency_ms") or 0.0
-        _rejections   = _proxy_stats.get("rejections") or 0
-        _fallbacks    = _proxy_stats.get("fallbacks") or 0
-        _total_cost   = _proxy_stats.get("total_cost_usd") or 0.0
-        _accept_rate  = ((_total_calls - _rejections) / _total_calls * 100) if _total_calls > 0 else 100.0
+        _avg_cost = _proxy_stats.get("avg_cost_usd") or 0.0
+        _avg_latency = _proxy_stats.get("avg_latency_ms") or 0.0
+        _rejections = _proxy_stats.get("rejections") or 0
+        _fallbacks = _proxy_stats.get("fallbacks") or 0
+        _total_cost = _proxy_stats.get("total_cost_usd") or 0.0
+        _accept_rate = (
+            ((_total_calls - _rejections) / _total_calls * 100) if _total_calls > 0 else 100.0
+        )
 
         if _total_calls == 0:
             st.info(
@@ -1041,17 +1171,20 @@ with _proxy_tab:
                 "**Quick start:** Send a request to `POST /proxy` to see live data here.\n\n"
                 "```bash\ncurl -X POST http://localhost:8000/proxy \\\\\n"
                 "  -H 'Content-Type: application/json' \\\\\n"
-                "  -d '{\"model_id\": \"llama-3.3-70b-versatile\", \"prompt\": \"Analyze Q3 trends\", "
-                "\"reject_threshold\": 0.30}'\n```",
+                '  -d \'{"model_id": "llama-3.3-70b-versatile", "prompt": "Analyze Q3 trends", '
+                '"reject_threshold": 0.30}\'\n```',
                 icon="📡",
             )
         else:
             # ── KPI row ───────────────────────────────────────────────────────
             _pk1, _pk2, _pk3, _pk4, _pk5 = st.columns(5)
             _pk1.metric("Total Calls", f"{_total_calls:,}")
-            _pk2.metric("Acceptance Rate", f"{_accept_rate:.1f}%",
-                        delta=f"{_accept_rate - 100:.1f}%" if _accept_rate < 100 else None,
-                        delta_color="inverse")
+            _pk2.metric(
+                "Acceptance Rate",
+                f"{_accept_rate:.1f}%",
+                delta=f"{_accept_rate - 100:.1f}%" if _accept_rate < 100 else None,
+                delta_color="inverse",
+            )
             _pk3.metric("Avg Validity", f"{_avg_validity:.3f}")
             _pk4.metric("Avg Latency", f"{_avg_latency:.0f} ms")
             _pk5.metric("Total Cost", f"${_total_cost:.6f}")
@@ -1059,47 +1192,74 @@ with _proxy_tab:
             # ── Rejection + fallback summary ──────────────────────────────────
             if _rejections > 0 or _fallbacks > 0:
                 _rej_rate = _rejections / _total_calls * 100
-                _fb_rate  = _fallbacks  / _total_calls * 100
+                _fb_rate = _fallbacks / _total_calls * 100
                 st.markdown(
                     f'<div class="spend-alert">'
                     f'<div class="spend-alert-title">Reliability Summary</div>'
                     f'<div class="spend-alert-body">'
-                    f'{_rejections} response{"s" if _rejections != 1 else ""} rejected ({_rej_rate:.1f}%) &nbsp;·&nbsp; '
-                    f'{_fallbacks} fallback{"s" if _fallbacks != 1 else ""} triggered ({_fb_rate:.1f}%)'
-                    f'</div></div>',
+                    f"{_rejections} response{'s' if _rejections != 1 else ''} rejected ({_rej_rate:.1f}%) &nbsp;·&nbsp; "
+                    f"{_fallbacks} fallback{'s' if _fallbacks != 1 else ''} triggered ({_fb_rate:.1f}%)"
+                    f"</div></div>",
                     unsafe_allow_html=True,
                 )
             else:
                 st.markdown(
                     '<div class="spend-ok"><div class="spend-ok-body">'
-                    '✅ 100% acceptance rate — all responses passed validity threshold.'
-                    '</div></div>',
+                    "✅ 100% acceptance rate — all responses passed validity threshold."
+                    "</div></div>",
                     unsafe_allow_html=True,
                 )
 
             # ── Recent calls table ────────────────────────────────────────────
             if _proxy_calls:
                 import datetime as _dt_p
+
                 import pandas as _pd_p
+
                 _df_proxy = _pd_p.DataFrame(_proxy_calls)
                 _df_proxy["time"] = _df_proxy["timestamp"].apply(
                     lambda ts: _dt_p.datetime.fromtimestamp(ts).strftime("%H:%M:%S")
                 )
-                _df_proxy["accepted"] = _df_proxy["accepted"].map(lambda v: "✅ yes" if v else "❌ no")
-                _df_proxy["fallback"] = _df_proxy["fallback_used"].map(lambda v: "↩ yes" if v else "—")
+                _df_proxy["accepted"] = _df_proxy["accepted"].map(
+                    lambda v: "✅ yes" if v else "❌ no"
+                )
+                _df_proxy["fallback"] = _df_proxy["fallback_used"].map(
+                    lambda v: "↩ yes" if v else "—"
+                )
                 _df_proxy["validity"] = _df_proxy["validity_score"].map("{:.3f}".format)
-                _df_proxy["cost"]     = _df_proxy["cost_usd"].map("${:.6f}".format)
-                _df_proxy["latency"]  = _df_proxy["latency_ms"].map("{:.0f} ms".format)
+                _df_proxy["cost"] = _df_proxy["cost_usd"].map("${:.6f}".format)
+                _df_proxy["latency"] = _df_proxy["latency_ms"].map("{:.0f} ms".format)
 
-                _show = _df_proxy[["time", "call_id", "model_id", "accepted",
-                                   "validity", "cost", "latency", "fallback", "attempts"]]
-                _show.columns = ["Time", "Call ID", "Model", "Accepted",
-                                 "Validity", "Cost", "Latency", "Fallback", "Attempts"]
+                _show = _df_proxy[
+                    [
+                        "time",
+                        "call_id",
+                        "model_id",
+                        "accepted",
+                        "validity",
+                        "cost",
+                        "latency",
+                        "fallback",
+                        "attempts",
+                    ]
+                ]
+                _show.columns = [
+                    "Time",
+                    "Call ID",
+                    "Model",
+                    "Accepted",
+                    "Validity",
+                    "Cost",
+                    "Latency",
+                    "Fallback",
+                    "Attempts",
+                ]
                 st.dataframe(_show, use_container_width=True, hide_index=True)
 
             # ── Validity distribution chart ───────────────────────────────────
             if len(_proxy_calls) >= 3:
                 import plotly.express as _px_p
+
                 _df_v = _pd_p.DataFrame(_proxy_calls)
                 _fig_v = _px_p.histogram(
                     _df_v,
@@ -1110,7 +1270,9 @@ with _proxy_tab:
                     color_discrete_sequence=["#4f46e5"],
                 )
                 _fig_v.update_layout(
-                    height=280, plot_bgcolor="#ffffff", paper_bgcolor="#ffffff",
+                    height=280,
+                    plot_bgcolor="#ffffff",
+                    paper_bgcolor="#ffffff",
                     font=dict(family="Inter", color="#111827"),
                     margin=dict(l=0, r=0, t=40, b=0),
                 )
@@ -1122,13 +1284,13 @@ with _proxy_tab:
     st.markdown("---")
     st.markdown("**How to use the proxy in your agent:**")
     st.code(
-        'import httpx\n\n'
+        "import httpx\n\n"
         'resp = httpx.post("http://localhost:8000/proxy", json={\n'
         '    "model_id": "llama-3.3-70b-versatile",  # or gemini-2.5-flash\n'
         '    "prompt": "Your prompt here",\n'
         '    "reject_threshold": 0.30,\n'
         '    "fallback_models": ["gemini-2.5-flash"],\n'
-        '}).json()\n\n'
+        "}).json()\n\n"
         'print(resp["content"])        # LLM response\n'
         'print(resp["accepted"])       # True if validity >= threshold\n'
         'print(resp["validity_score"]) # RDAB scorecard\n'
@@ -1142,6 +1304,7 @@ with _hist_tab:
         _total = get_total_eval_count()
 
         import datetime as _dt
+
         _simulated_count = sum(1 for e in _evals if e.get("simulated", 1))
         _live_count = len(_evals) - _simulated_count
         if _live_count == 0 and _total > 0:
@@ -1161,23 +1324,31 @@ with _hist_tab:
             f'<div class="obs-stat-value">{_simulated_count}</div></div>'
             f'<div class="obs-stat"><div class="obs-stat-label">Live</div>'
             f'<div class="obs-stat-value">{_live_count}</div></div>'
-            f'</div>',
+            f"</div>",
             unsafe_allow_html=True,
         )
 
         if _evals:
             import pandas as _pd2
+
             _df_hist = _pd2.DataFrame(_evals)
             _df_hist["time"] = _df_hist["timestamp"].apply(
                 lambda ts: _dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
             )
             _df_hist["rdab_score"] = _df_hist["rdab_score"].map("{:.3f}".format)
-            _df_hist["cost_usd"]   = _df_hist["cost_usd"].map("{:.6f}".format)
-            _df_hist["mode"]       = _df_hist.apply(
+            _df_hist["cost_usd"] = _df_hist["cost_usd"].map("{:.6f}".format)
+            _df_hist["mode"] = _df_hist.apply(
                 lambda r: "live" if r.get("simulated", 1) == 0 else "sim", axis=1
             )
-            _show_cols = ["time", "eval_id", "recommended_model", "rdab_score",
-                          "cost_usd", "mode", "dataset_hash"]
+            _show_cols = [
+                "time",
+                "eval_id",
+                "recommended_model",
+                "rdab_score",
+                "cost_usd",
+                "mode",
+                "dataset_hash",
+            ]
             _df_hist = _df_hist[[c for c in _show_cols if c in _df_hist.columns]]
             _df_hist.columns = [c.replace("_", " ").title() for c in _df_hist.columns]
             st.dataframe(_df_hist, use_container_width=True, hide_index=True)
@@ -1191,18 +1362,19 @@ with _drift_tab:
         _drifts = get_recent_drift_events(limit=20)
         if _drifts:
             import datetime as _dt2
+
             for _d in _drifts:
                 _ts = _dt2.datetime.fromtimestamp(_d["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
                 st.markdown(
                     f'<div class="drift-alert">'
                     f'<div class="drift-alert-title">Score Drift — {_d["model_id"]}</div>'
                     f'<div class="drift-alert-body">'
-                    f'Detected at {_ts} &nbsp;·&nbsp; '
-                    f'Current: <strong>{_d["current_score"]:.3f}</strong> &nbsp;·&nbsp; '
-                    f'Historical avg: <strong>{_d["historical_avg"]:.3f}</strong> &nbsp;·&nbsp; '
-                    f'Drop: <strong>{_d["drop_pct"]:.1f}%</strong> &nbsp;·&nbsp; '
-                    f'Eval ID: <code>{_d["eval_id"]}</code>'
-                    f'</div></div>',
+                    f"Detected at {_ts} &nbsp;·&nbsp; "
+                    f"Current: <strong>{_d['current_score']:.3f}</strong> &nbsp;·&nbsp; "
+                    f"Historical avg: <strong>{_d['historical_avg']:.3f}</strong> &nbsp;·&nbsp; "
+                    f"Drop: <strong>{_d['drop_pct']:.1f}%</strong> &nbsp;·&nbsp; "
+                    f"Eval ID: <code>{_d['eval_id']}</code>"
+                    f"</div></div>",
                     unsafe_allow_html=True,
                 )
         else:
@@ -1212,7 +1384,9 @@ with _drift_tab:
         if _webhook:
             st.caption("Slack alerts: **enabled** (SLACK_WEBHOOK_URL is set)")
         else:
-            st.caption("Slack alerts: disabled — set `SLACK_WEBHOOK_URL` in your environment to enable.")
+            st.caption(
+                "Slack alerts: disabled — set `SLACK_WEBHOOK_URL` in your environment to enable."
+            )
     except Exception as _e:
         st.info(f"Drift data unavailable: {_e}")
 
@@ -1220,20 +1394,28 @@ with _avg_tab:
     try:
         _avgs = get_model_averages()
         if _avgs:
-            import pandas as _pd3
             import datetime as _dt3
+
+            import pandas as _pd3
+
             _df_avg = _pd3.DataFrame(_avgs)
             _df_avg["last_seen"] = _df_avg["last_seen"].apply(
                 lambda ts: _dt3.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
             )
-            for _col in ["avg_rdab", "avg_correctness", "avg_code_quality",
-                         "avg_efficiency", "avg_stat_validity"]:
+            for _col in [
+                "avg_rdab",
+                "avg_correctness",
+                "avg_code_quality",
+                "avg_efficiency",
+                "avg_stat_validity",
+            ]:
                 if _col in _df_avg.columns:
                     _df_avg[_col] = _df_avg[_col].map("{:.3f}".format)
             if "avg_cost" in _df_avg.columns:
                 _df_avg["avg_cost"] = _df_avg["avg_cost"].map("{:.6f}".format)
-            _df_avg.columns = [c.replace("avg_", "").replace("_", " ").title()
-                               for c in _df_avg.columns]
+            _df_avg.columns = [
+                c.replace("avg_", "").replace("_", " ").title() for c in _df_avg.columns
+            ]
             st.dataframe(_df_avg, use_container_width=True, hide_index=True)
             st.caption("Only models with ≥ 2 logged runs are shown.")
         else:
@@ -1265,35 +1447,56 @@ with _spend_tab:
     with _sm_col2:
         _daily_calls = st.number_input(
             "Calls per day",
-            min_value=1, max_value=10_000_000, value=1000, step=100,
+            min_value=1,
+            max_value=10_000_000,
+            value=1000,
+            step=100,
             key="spend_calls",
         )
 
-    _avg_input_tokens  = st.slider("Avg input tokens per call",  min_value=100, max_value=50000, value=2000, step=100, key="spend_in_tok")
-    _avg_output_tokens = st.slider("Avg output tokens per call", min_value=50,  max_value=10000, value=512,  step=50,  key="spend_out_tok")
+    _avg_input_tokens = st.slider(
+        "Avg input tokens per call",
+        min_value=100,
+        max_value=50000,
+        value=2000,
+        step=100,
+        key="spend_in_tok",
+    )
+    _avg_output_tokens = st.slider(
+        "Avg output tokens per call",
+        min_value=50,
+        max_value=10000,
+        value=512,
+        step=50,
+        key="spend_out_tok",
+    )
 
     _current_pricing = _ALL_MODELS[_current_model_id]
     _cost_per_call = _current_pricing.estimate_cost(_avg_input_tokens, _avg_output_tokens)
-    _monthly_cost  = _cost_per_call * _daily_calls * 30
+    _monthly_cost = _cost_per_call * _daily_calls * 30
 
     _sm_c1, _sm_c2, _sm_c3 = st.columns(3)
     _sm_c1.metric("Cost per call", f"${_cost_per_call:.5f}")
-    _sm_c2.metric("Daily spend",   f"${_cost_per_call * _daily_calls:.2f}")
+    _sm_c2.metric("Daily spend", f"${_cost_per_call * _daily_calls:.2f}")
     _sm_c3.metric("Monthly spend", f"${_monthly_cost:,.2f}")
 
     st.markdown("---")
     st.markdown("**Cheaper alternatives from this benchmark:**")
 
     _alternatives_found = False
-    for _alt_id, _alt_p in sorted(_ALL_MODELS.items(), key=lambda x: x[1].estimate_cost(_avg_input_tokens, _avg_output_tokens)):
+    for _alt_id, _alt_p in sorted(
+        _ALL_MODELS.items(), key=lambda x: x[1].estimate_cost(_avg_input_tokens, _avg_output_tokens)
+    ):
         if _alt_id == _current_model_id:
             continue
         _alt_cost_per_call = _alt_p.estimate_cost(_avg_input_tokens, _avg_output_tokens)
         if _alt_cost_per_call >= _cost_per_call:
             continue
         _alt_monthly = _alt_cost_per_call * _daily_calls * 30
-        _savings_mo  = _monthly_cost - _alt_monthly
-        _savings_pct_s = (1 - _alt_cost_per_call / _cost_per_call) * 100 if _cost_per_call > 0 else 0
+        _savings_mo = _monthly_cost - _alt_monthly
+        _savings_pct_s = (
+            (1 - _alt_cost_per_call / _cost_per_call) * 100 if _cost_per_call > 0 else 0
+        )
 
         # Check if eval result has a score for this model to judge quality parity
         _eval_result = st.session_state.get("result")
@@ -1312,21 +1515,31 @@ with _spend_tab:
             if _rdab_diff >= 0:
                 _quality_note = f" · RDAB score is {_rdab_diff:.1f}pt **better** ✓"
             elif _rdab_diff >= -5:
-                _quality_note = f" · RDAB score within {abs(_rdab_diff):.1f}pt (acceptable trade-off)"
+                _quality_note = (
+                    f" · RDAB score within {abs(_rdab_diff):.1f}pt (acceptable trade-off)"
+                )
             else:
-                _quality_note = f" · RDAB score is {abs(_rdab_diff):.1f}pt lower — review before switching"
+                _quality_note = (
+                    f" · RDAB score is {abs(_rdab_diff):.1f}pt lower — review before switching"
+                )
 
         if _savings_mo >= 1.0:
-            _alert_cls = "spend-alert" if (_alt_rdab is None or (_curr_rdab is not None and _alt_rdab < _curr_rdab - 0.05)) else "spend-ok"
-            _icon = "⚠️ Switch opportunity" if _alert_cls == "spend-alert" else "✅ Recommended switch"
+            _alert_cls = (
+                "spend-alert"
+                if (_alt_rdab is None or (_curr_rdab is not None and _alt_rdab < _curr_rdab - 0.05))
+                else "spend-ok"
+            )
+            _icon = (
+                "⚠️ Switch opportunity" if _alert_cls == "spend-alert" else "✅ Recommended switch"
+            )
             st.markdown(
                 f'<div class="{_alert_cls}">'
                 f'<div class="spend-alert-title">{_icon} → {_alt_p.display_name}</div>'
                 f'<div class="spend-alert-body">'
-                f'<strong>${_savings_mo:,.0f}/month</strong> savings ({_savings_pct_s:.0f}% cheaper)'
-                f' at {_daily_calls:,} calls/day{_quality_note}. '
-                f'Current: <strong>${_monthly_cost:,.0f}/mo</strong> → New: <strong>${_alt_monthly:,.0f}/mo</strong>.'
-                f'</div></div>',
+                f"<strong>${_savings_mo:,.0f}/month</strong> savings ({_savings_pct_s:.0f}% cheaper)"
+                f" at {_daily_calls:,} calls/day{_quality_note}. "
+                f"Current: <strong>${_monthly_cost:,.0f}/mo</strong> → New: <strong>${_alt_monthly:,.0f}/mo</strong>."
+                f"</div></div>",
                 unsafe_allow_html=True,
             )
             _alternatives_found = True
@@ -1336,9 +1549,9 @@ with _spend_tab:
     if not _alternatives_found:
         st.markdown(
             '<div class="spend-ok"><div class="spend-ok-body">'
-            '✅ You\'re already using one of the most cost-effective models for this call volume. '
-            'Run an evaluation with your data to verify quality.'
-            '</div></div>',
+            "✅ You're already using one of the most cost-effective models for this call volume. "
+            "Run an evaluation with your data to verify quality."
+            "</div></div>",
             unsafe_allow_html=True,
         )
 
@@ -1349,7 +1562,8 @@ with _spend_tab:
 
 
 # ─── Footer ───────────────────────────────────────────────────────────────────
-st.markdown("""
+st.markdown(
+    """
 <div class="footer">
   CostGuard &nbsp;·&nbsp;
   Powered by <a href="https://github.com/patibandlavenkatamanideep/RealDataAgentBench" target="_blank">RealDataAgentBench</a>
@@ -1358,15 +1572,26 @@ st.markdown("""
   &nbsp;·&nbsp; MIT License
   &nbsp;·&nbsp; <a href="/Privacy_Policy" target="_self">Privacy Policy</a>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 def run() -> None:
     import os
     import subprocess
+
     subprocess.run(
-        [sys.executable, "-m", "streamlit", "run", __file__,
-         "--server.port", os.getenv("STREAMLIT_PORT", "8501"),
-         "--server.address", "0.0.0.0"],
+        [
+            sys.executable,
+            "-m",
+            "streamlit",
+            "run",
+            __file__,
+            "--server.port",
+            os.getenv("STREAMLIT_PORT", "8501"),
+            "--server.address",
+            "0.0.0.0",
+        ],
         check=True,
     )

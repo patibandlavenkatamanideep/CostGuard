@@ -69,9 +69,18 @@ def _make_row(
     inputs = json.dumps({"messages": [{"role": "user", "content": prompt}]})
     outputs = json.dumps({"choices": [{"message": {"role": "assistant", "content": response}}]})
     return (
-        step_id, run_id, seq, kind, model,
-        inputs, outputs, input_tokens, output_tokens, cost_usd,
-        latency_ms, error,
+        step_id,
+        run_id,
+        seq,
+        kind,
+        model,
+        inputs,
+        outputs,
+        input_tokens,
+        output_tokens,
+        cost_usd,
+        latency_ms,
+        error,
         "2026-05-11T00:00:00+00:00",  # created_at
         "2026-05-11T00:00:01+00:00",  # completed_at
     )
@@ -96,6 +105,7 @@ def _temp_db(rows: list[tuple]) -> str:
 
 
 # ─── tether_reader tests ──────────────────────────────────────────────────────
+
 
 class TestTetherReader:
     def test_yields_typed_steps(self):
@@ -150,11 +160,20 @@ class TestTetherReader:
         conn.execute(
             "INSERT INTO steps VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
-                "s1", "run-1", 2, "llm_call", "gpt-4o",
+                "s1",
+                "run-1",
+                2,
+                "llm_call",
+                "gpt-4o",
                 '{"messages":[{"role":"user","content":"hi"}]}',
                 None,  # no outputs yet — in-flight
-                5, 0, None, None, None,
-                "2026-05-11T00:00:02+00:00", None,
+                5,
+                0,
+                None,
+                None,
+                None,
+                "2026-05-11T00:00:02+00:00",
+                None,
             ),
         )
         conn.commit()
@@ -168,6 +187,7 @@ class TestTetherReader:
 
 
 # ─── _bootstrap_ci unit tests ─────────────────────────────────────────────────
+
 
 class TestBootstrapCIUnit:
     def test_zero_deltas_ci_is_zero(self):
@@ -208,6 +228,7 @@ class TestBootstrapCIUnit:
 
 # ─── POST /replay endpoint tests ─────────────────────────────────────────────
 
+
 class TestReplayHappyPath:
     def test_response_shape_and_delta(self):
         rows = [_make_row(f"s{i}", "run-1", i, response="Answer " * 5) for i in range(5)]
@@ -215,40 +236,59 @@ class TestReplayHappyPath:
         mock_score = type("S", (), {"rdab_score": 0.7})()
         try:
             with (
-                patch("backend.replay._call_llm", new=AsyncMock(return_value=("alt response text", 8, 15))),
+                patch(
+                    "backend.replay._call_llm",
+                    new=AsyncMock(return_value=("alt response text", 8, 15)),
+                ),
                 patch("backend.replay._score_response_fast", return_value=mock_score),
             ):
-                resp = client.post("/replay", json={
-                    "tether_db_path": db_path,
-                    "run_id": "run-1",
-                    "alternate_model": "gpt-4.1",
-                    "n_bootstrap_samples": 100,
-                })
+                resp = client.post(
+                    "/replay",
+                    json={
+                        "tether_db_path": db_path,
+                        "run_id": "run-1",
+                        "alternate_model": "gpt-4.1",
+                        "n_bootstrap_samples": 100,
+                    },
+                )
 
             assert resp.status_code == 200
             body = resp.json()
             for field in (
-                "primary_model", "alternate_model", "n_calls",
-                "primary_mean_score", "alternate_mean_score", "delta",
-                "ci_low", "ci_high", "primary_cost_usd", "alternate_cost_usd",
+                "primary_model",
+                "alternate_model",
+                "n_calls",
+                "primary_mean_score",
+                "alternate_mean_score",
+                "delta",
+                "ci_low",
+                "ci_high",
+                "primary_cost_usd",
+                "alternate_cost_usd",
                 "savings_per_call_usd",
             ):
                 assert field in body, f"Missing field: {field}"
 
             assert body["n_calls"] == 5
             assert body["alternate_model"] == "gpt-4.1"
-            assert abs(body["delta"] - (body["alternate_mean_score"] - body["primary_mean_score"])) < 1e-6
+            assert (
+                abs(body["delta"] - (body["alternate_mean_score"] - body["primary_mean_score"]))
+                < 1e-6
+            )
         finally:
             Path(db_path).unlink(missing_ok=True)
 
 
 class TestReplayMissingDB:
     def test_returns_400(self):
-        resp = client.post("/replay", json={
-            "tether_db_path": "/nonexistent/path/tether.db",
-            "run_id": "run-1",
-            "alternate_model": "gpt-4.1",
-        })
+        resp = client.post(
+            "/replay",
+            json={
+                "tether_db_path": "/nonexistent/path/tether.db",
+                "run_id": "run-1",
+                "alternate_model": "gpt-4.1",
+            },
+        )
         assert resp.status_code == 400
         detail = resp.json()["detail"].lower()
         assert "tether_db_path" in detail or "does not exist" in detail or "not found" in detail
@@ -260,11 +300,14 @@ class TestReplayUnknownRunId:
         db_path = _temp_db(rows)
         try:
             with patch("backend.replay._call_llm", new=AsyncMock(return_value=("x", 1, 1))):
-                resp = client.post("/replay", json={
-                    "tether_db_path": db_path,
-                    "run_id": "run-does-not-exist",
-                    "alternate_model": "gpt-4.1",
-                })
+                resp = client.post(
+                    "/replay",
+                    json={
+                        "tether_db_path": db_path,
+                        "run_id": "run-does-not-exist",
+                        "alternate_model": "gpt-4.1",
+                    },
+                )
             assert resp.status_code == 404
         finally:
             Path(db_path).unlink(missing_ok=True)
@@ -278,11 +321,14 @@ class TestReplayAllEmptyPrompts:
         ]
         db_path = _temp_db(rows)
         try:
-            resp = client.post("/replay", json={
-                "tether_db_path": db_path,
-                "run_id": "run-1",
-                "alternate_model": "gpt-4.1",
-            })
+            resp = client.post(
+                "/replay",
+                json={
+                    "tether_db_path": db_path,
+                    "run_id": "run-1",
+                    "alternate_model": "gpt-4.1",
+                },
+            )
             assert resp.status_code == 422
         finally:
             Path(db_path).unlink(missing_ok=True)
@@ -293,11 +339,14 @@ class TestReplayUnknownAlternateModel:
         rows = [_make_row("s0", "run-1", 1)]
         db_path = _temp_db(rows)
         try:
-            resp = client.post("/replay", json={
-                "tether_db_path": db_path,
-                "run_id": "run-1",
-                "alternate_model": "not-a-real-model-xyz",
-            })
+            resp = client.post(
+                "/replay",
+                json={
+                    "tether_db_path": db_path,
+                    "run_id": "run-1",
+                    "alternate_model": "not-a-real-model-xyz",
+                },
+            )
             assert resp.status_code == 400
             detail = resp.json()["detail"].lower()
             assert "alternate_model" in detail or "unknown" in detail
@@ -312,15 +361,20 @@ class TestReplayBootstrapCIContainsZero:
         mock_score = type("S", (), {"rdab_score": 0.5})()
         try:
             with (
-                patch("backend.replay._call_llm", new=AsyncMock(return_value=("same text", 10, 10))),
+                patch(
+                    "backend.replay._call_llm", new=AsyncMock(return_value=("same text", 10, 10))
+                ),
                 patch("backend.replay._score_response_fast", return_value=mock_score),
             ):
-                resp = client.post("/replay", json={
-                    "tether_db_path": db_path,
-                    "run_id": "run-1",
-                    "alternate_model": "gpt-4.1",
-                    "n_bootstrap_samples": 200,
-                })
+                resp = client.post(
+                    "/replay",
+                    json={
+                        "tether_db_path": db_path,
+                        "run_id": "run-1",
+                        "alternate_model": "gpt-4.1",
+                        "n_bootstrap_samples": 200,
+                    },
+                )
 
             assert resp.status_code == 200
             body = resp.json()
@@ -340,12 +394,15 @@ class TestReplayCostCalculation:
                 patch("backend.replay._call_llm", new=AsyncMock(return_value=("response", 5, 10))),
                 patch("backend.replay._score_response_fast", return_value=mock_score),
             ):
-                resp = client.post("/replay", json={
-                    "tether_db_path": db_path,
-                    "run_id": "run-1",
-                    "alternate_model": "gpt-4.1",
-                    "n_bootstrap_samples": 100,
-                })
+                resp = client.post(
+                    "/replay",
+                    json={
+                        "tether_db_path": db_path,
+                        "run_id": "run-1",
+                        "alternate_model": "gpt-4.1",
+                        "n_bootstrap_samples": 100,
+                    },
+                )
 
             assert resp.status_code == 200
             body = resp.json()

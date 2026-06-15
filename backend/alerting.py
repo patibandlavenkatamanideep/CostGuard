@@ -17,18 +17,14 @@ propagate to the caller.
 
 from __future__ import annotations
 
-import asyncio
 import collections
-import json
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Deque
 
 import httpx
 
 from backend.logger import logger
-
 
 # ─── Configuration (from env vars) ───────────────────────────────────────────
 
@@ -47,10 +43,11 @@ _FAILURE_WINDOW = 100
 
 # ─── Alert payload ────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Alert:
     alert_type: str
-    severity: str           # critical | warning | info
+    severity: str  # critical | warning | info
     model_id: str
     provider: str
     message: str
@@ -59,7 +56,11 @@ class Alert:
     timestamp: float = field(default_factory=time.time)
 
     def to_slack_block(self) -> dict:
-        icons = {"critical": ":rotating_light:", "warning": ":warning:", "info": ":information_source:"}
+        icons = {
+            "critical": ":rotating_light:",
+            "warning": ":warning:",
+            "info": ":information_source:",
+        }
         icon = icons.get(self.severity, ":bell:")
         ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(self.timestamp))
         details_text = "\n".join(f"> `{k}`: `{v}`" for k, v in self.details.items())
@@ -67,7 +68,10 @@ class Alert:
             "blocks": [
                 {
                     "type": "header",
-                    "text": {"type": "plain_text", "text": f"{icon} CostGuard {self.severity.upper()}: {self.alert_type}"},
+                    "text": {
+                        "type": "plain_text",
+                        "text": f"{icon} CostGuard {self.severity.upper()}: {self.alert_type}",
+                    },
                 },
                 {
                     "type": "section",
@@ -75,7 +79,12 @@ class Alert:
                 },
                 {
                     "type": "context",
-                    "elements": [{"type": "mrkdwn", "text": f"Model: `{self.model_id}` | Call: `{self.call_id}` | {ts_str}"}],
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": f"Model: `{self.model_id}` | Call: `{self.call_id}` | {ts_str}",
+                        }
+                    ],
                 },
             ]
         }
@@ -95,6 +104,7 @@ class Alert:
 
 # ─── Alert Engine ─────────────────────────────────────────────────────────────
 
+
 class AlertEngine:
     """
     Stateful alert engine. One shared instance per process.
@@ -106,10 +116,10 @@ class AlertEngine:
         self._last_fired: dict[str, float] = {}
 
         # Rolling window of recent call outcomes for failure rate
-        self._recent_outcomes: Deque[bool] = collections.deque(maxlen=_FAILURE_WINDOW)
+        self._recent_outcomes: collections.deque[bool] = collections.deque(maxlen=_FAILURE_WINDOW)
 
         # Cost rolling average per model
-        self._cost_history: dict[str, Deque[float]] = {}
+        self._cost_history: dict[str, collections.deque[float]] = {}
 
         # Consecutive low validity counter per model
         self._consecutive_low: dict[str, int] = {}
@@ -149,6 +159,7 @@ class AlertEngine:
             # Track in metrics
             try:
                 from backend.metrics import alerts_fired_total
+
                 channels = ["console"]
                 if SLACK_WEBHOOK_URL:
                     channels.append("slack")
@@ -210,19 +221,21 @@ class AlertEngine:
         severity = "critical" if validity_score < 0.15 else "warning"
         self._mark_fired(cooldown_key)
 
-        await self._fire(Alert(
-            alert_type="ValidityThreshold",
-            severity=severity,
-            model_id=model_id,
-            provider=_get_provider(model_id),
-            message=f"{model_id} validity score {validity_score:.3f} below threshold {threshold:.3f}",
-            details={
-                "validity_score": f"{validity_score:.3f}",
-                "threshold": f"{threshold:.3f}",
-                "consecutive_rejections": consecutive,
-            },
-            call_id=call_id,
-        ))
+        await self._fire(
+            Alert(
+                alert_type="ValidityThreshold",
+                severity=severity,
+                model_id=model_id,
+                provider=_get_provider(model_id),
+                message=f"{model_id} validity score {validity_score:.3f} below threshold {threshold:.3f}",
+                details={
+                    "validity_score": f"{validity_score:.3f}",
+                    "threshold": f"{threshold:.3f}",
+                    "consecutive_rejections": consecutive,
+                },
+                call_id=call_id,
+            )
+        )
 
     async def check_consecutive_low_validity(
         self,
@@ -241,22 +254,24 @@ class AlertEngine:
             return
         self._mark_fired(cooldown_key)
 
-        await self._fire(Alert(
-            alert_type="ConsecutiveLowValidity",
-            severity="critical",
-            model_id=model_id,
-            provider=_get_provider(model_id),
-            message=(
-                f"{model_id} has {consecutive} consecutive low-validity responses. "
-                "Consider switching to a fallback model."
-            ),
-            details={
-                "consecutive_count": consecutive,
-                "threshold": f"{threshold:.3f}",
-                "last_score": f"{validity_score:.3f}",
-            },
-            call_id=call_id,
-        ))
+        await self._fire(
+            Alert(
+                alert_type="ConsecutiveLowValidity",
+                severity="critical",
+                model_id=model_id,
+                provider=_get_provider(model_id),
+                message=(
+                    f"{model_id} has {consecutive} consecutive low-validity responses. "
+                    "Consider switching to a fallback model."
+                ),
+                details={
+                    "consecutive_count": consecutive,
+                    "threshold": f"{threshold:.3f}",
+                    "last_score": f"{validity_score:.3f}",
+                },
+                call_id=call_id,
+            )
+        )
 
     async def check_cost_spike(
         self,
@@ -286,23 +301,25 @@ class AlertEngine:
             return
         self._mark_fired(cooldown_key)
 
-        await self._fire(Alert(
-            alert_type="CostSpike",
-            severity="warning",
-            model_id=model_id,
-            provider=_get_provider(model_id),
-            message=(
-                f"{model_id} cost spike: ${cost_usd:.6f} is "
-                f"{cost_usd/avg:.1f}× above rolling average ${avg:.6f}"
-            ),
-            details={
-                "current_cost_usd": f"{cost_usd:.6f}",
-                "rolling_avg_usd": f"{avg:.6f}",
-                "spike_ratio": f"{cost_usd/avg:.2f}×",
-                "window_size": len(history),
-            },
-            call_id=call_id,
-        ))
+        await self._fire(
+            Alert(
+                alert_type="CostSpike",
+                severity="warning",
+                model_id=model_id,
+                provider=_get_provider(model_id),
+                message=(
+                    f"{model_id} cost spike: ${cost_usd:.6f} is "
+                    f"{cost_usd / avg:.1f}× above rolling average ${avg:.6f}"
+                ),
+                details={
+                    "current_cost_usd": f"{cost_usd:.6f}",
+                    "rolling_avg_usd": f"{avg:.6f}",
+                    "spike_ratio": f"{cost_usd / avg:.2f}×",
+                    "window_size": len(history),
+                },
+                call_id=call_id,
+            )
+        )
 
     async def check_failure_rate(
         self,
@@ -326,23 +343,25 @@ class AlertEngine:
             return
         self._mark_fired(cooldown_key)
 
-        await self._fire(Alert(
-            alert_type="HighFailureRate",
-            severity="critical",
-            model_id=model_id,
-            provider=provider,
-            message=(
-                f"High failure rate for {provider}: "
-                f"{failure_rate:.0%} of last {len(self._recent_outcomes)} calls failed"
-            ),
-            details={
-                "failure_rate": f"{failure_rate:.1%}",
-                "window_size": len(self._recent_outcomes),
-                "threshold": f"{FAILURE_RATE_THRESHOLD:.0%}",
-                "last_error": error[:200],
-            },
-            call_id=call_id,
-        ))
+        await self._fire(
+            Alert(
+                alert_type="HighFailureRate",
+                severity="critical",
+                model_id=model_id,
+                provider=provider,
+                message=(
+                    f"High failure rate for {provider}: "
+                    f"{failure_rate:.0%} of last {len(self._recent_outcomes)} calls failed"
+                ),
+                details={
+                    "failure_rate": f"{failure_rate:.1%}",
+                    "window_size": len(self._recent_outcomes),
+                    "threshold": f"{FAILURE_RATE_THRESHOLD:.0%}",
+                    "last_error": error[:200],
+                },
+                call_id=call_id,
+            )
+        )
 
     def record_success(self, model_id: str) -> None:
         """Record a successful call (used for failure rate tracking)."""
@@ -353,11 +372,15 @@ class AlertEngine:
         """Persist cooldown and counter state to SQLite. Called at shutdown."""
         try:
             from evaluation.observability import save_runtime_state
-            save_runtime_state("alert_engine", {
-                "last_fired": self._last_fired,
-                "consecutive_low": self._consecutive_low,
-                "recent_outcomes": list(self._recent_outcomes),
-            })
+
+            save_runtime_state(
+                "alert_engine",
+                {
+                    "last_fired": self._last_fired,
+                    "consecutive_low": self._consecutive_low,
+                    "recent_outcomes": list(self._recent_outcomes),
+                },
+            )
         except Exception as exc:
             logger.warning(f"[alerting] Failed to save state: {exc}")
 
@@ -365,6 +388,7 @@ class AlertEngine:
         """Restore cooldown and counter state from SQLite. Called at startup."""
         try:
             from evaluation.observability import load_runtime_state
+
             data = load_runtime_state("alert_engine")
             if not data:
                 return
@@ -390,21 +414,23 @@ class AlertEngine:
             return
         self._mark_fired(cooldown_key)
 
-        await self._fire(Alert(
-            alert_type="CircuitBreakerOpen",
-            severity="critical",
-            model_id=f"{provider}/*",
-            provider=provider,
-            message=(
-                f"Circuit breaker OPENED for {provider} after {failure_count} consecutive failures. "
-                "All {provider} calls will be blocked until the breaker resets."
-            ),
-            details={
-                "failure_count": failure_count,
-                "timeout_seconds": str(os.getenv("CIRCUIT_BREAKER_TIMEOUT", "60")),
-                "action": "Calls to this provider are rejected until recovery",
-            },
-        ))
+        await self._fire(
+            Alert(
+                alert_type="CircuitBreakerOpen",
+                severity="critical",
+                model_id=f"{provider}/*",
+                provider=provider,
+                message=(
+                    f"Circuit breaker OPENED for {provider} after {failure_count} consecutive failures. "
+                    "All {provider} calls will be blocked until the breaker resets."
+                ),
+                details={
+                    "failure_count": failure_count,
+                    "timeout_seconds": str(os.getenv("CIRCUIT_BREAKER_TIMEOUT", "60")),
+                    "action": "Calls to this provider are rejected until recovery",
+                },
+            )
+        )
 
     async def check_rate_limit(
         self,
@@ -418,23 +444,26 @@ class AlertEngine:
             return
         self._mark_fired(cooldown_key)
 
-        await self._fire(Alert(
-            alert_type="RateLimit",
-            severity="warning",
-            model_id=model_id,
-            provider=provider,
-            message=f"Rate limit (429) hit for {provider}. Consider reducing concurrency or upgrading quota.",
-            details={
-                "provider": provider,
-                "action": "Automatic retry with exponential backoff will proceed",
-            },
-            call_id=call_id,
-        ))
+        await self._fire(
+            Alert(
+                alert_type="RateLimit",
+                severity="warning",
+                model_id=model_id,
+                provider=provider,
+                message=f"Rate limit (429) hit for {provider}. Consider reducing concurrency or upgrading quota.",
+                details={
+                    "provider": provider,
+                    "action": "Automatic retry with exponential backoff will proceed",
+                },
+                call_id=call_id,
+            )
+        )
 
 
 def _get_provider(model_id: str) -> str:
     try:
         from evaluation.pricing import MODELS
+
         p = MODELS.get(model_id)
         return p.provider if p else "unknown"
     except Exception:

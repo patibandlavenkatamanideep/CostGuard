@@ -29,8 +29,8 @@ RDAB scoring dimensions (ref: realdataagentbench/scoring/):
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
-import os
 import re
 import tempfile
 import time
@@ -43,7 +43,6 @@ import pandas as pd
 from backend.config import get_settings
 from backend.logger import logger
 from backend.models import (
-    DatasetStats,
     EvalMode,
     EvalResponse,
     EvalStatus,
@@ -67,11 +66,6 @@ settings = get_settings()
 # ─── RDAB availability check ─────────────────────────────────────────────────
 
 try:
-    from realdataagentbench.harness import Agent, Runner
-    from realdataagentbench.harness.tools import get_dataframe_info, run_code
-    from realdataagentbench.scoring import CompositeScorer
-    from realdataagentbench.core import TaskRegistry
-
     RDAB_AVAILABLE = True
     logger.info("RealDataAgentBench package loaded successfully")
 except Exception as _rdab_err:
@@ -83,6 +77,7 @@ except Exception as _rdab_err:
 
 
 # ─── Dynamic TaskSchema builder ──────────────────────────────────────────────
+
 
 def _build_task_dict(
     df: pd.DataFrame,
@@ -123,9 +118,7 @@ def _build_task_dict(
         if m:
             col = m.group(1)
             if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
-                ground_truth[f"{col}_above_median_count"] = int(
-                    (df[col] > df[col].median()).sum()
-                )
+                ground_truth[f"{col}_above_median_count"] = int((df[col] > df[col].median()).sum())
 
         # Top-3 most frequent categorical values
         m = re.search(r"top 3 most frequent values in the '([^']+)'", q, re.IGNORECASE)
@@ -158,7 +151,8 @@ def _build_task_dict(
         if m:
             c1, c2 = m.group(1), m.group(2)
             if (
-                c1 in df.columns and c2 in df.columns
+                c1 in df.columns
+                and c2 in df.columns
                 and pd.api.types.is_numeric_dtype(df[c1])
                 and pd.api.types.is_numeric_dtype(df[c2])
             ):
@@ -175,7 +169,7 @@ def _build_task_dict(
             f"{data_text}\n\n"
             f"Task: {task_description}\n\n"
             "Answer these questions:\n"
-            + "\n".join(f"{i+1}. {q}" for i, q in enumerate(questions))
+            + "\n".join(f"{i + 1}. {q}" for i, q in enumerate(questions))
         ),
         "ground_truth": ground_truth,
         "dataset": {"type": "inline"},
@@ -194,6 +188,7 @@ def _build_task_dict(
 
 
 # ─── RDAB live evaluation ─────────────────────────────────────────────────────
+
 
 async def _run_rdab_agent(
     pricing: ModelPricing,
@@ -238,10 +233,8 @@ async def _run_rdab_agent(
 
     finally:
         if tmp_path:
-            try:
+            with contextlib.suppress(Exception):
                 Path(tmp_path).unlink(missing_ok=True)
-            except Exception:
-                pass
 
 
 def _rdab_sync_run(
@@ -315,6 +308,7 @@ def _rdab_score(
 
 # ─── Simulation disclaimer ───────────────────────────────────────────────────
 
+
 def get_simulation_disclaimer() -> str:
     """
     Return a detailed plain-English warning about what simulation mode does
@@ -346,6 +340,7 @@ def get_simulation_disclaimer() -> str:
 
 # ─── Simulation fallback ──────────────────────────────────────────────────────
 
+
 def _simulate_scorecard(
     pricing: ModelPricing,
     seed: int = 42,
@@ -361,23 +356,40 @@ def _simulate_scorecard(
     import hashlib
 
     combined = seed ^ (dataset_fingerprint % 99991)  # mix dataset into seed
-    h = int(hashlib.md5(f"{pricing.model_id}{combined}".encode()).hexdigest(), 16)
+    h = int(
+        hashlib.md5(f"{pricing.model_id}{combined}".encode(), usedforsecurity=False).hexdigest(), 16
+    )
     rng = (h % 10000) / 10000.0
 
     base = {
-        "premium": {"correctness": 0.88, "code_quality": 0.79, "efficiency": 0.78, "stat_validity": 0.26},
-        "balanced": {"correctness": 0.78, "code_quality": 0.72, "efficiency": 0.84, "stat_validity": 0.24},
-        "economy":  {"correctness": 0.68, "code_quality": 0.66, "efficiency": 0.88, "stat_validity": 0.22},
+        "premium": {
+            "correctness": 0.88,
+            "code_quality": 0.79,
+            "efficiency": 0.78,
+            "stat_validity": 0.26,
+        },
+        "balanced": {
+            "correctness": 0.78,
+            "code_quality": 0.72,
+            "efficiency": 0.84,
+            "stat_validity": 0.24,
+        },
+        "economy": {
+            "correctness": 0.68,
+            "code_quality": 0.66,
+            "efficiency": 0.88,
+            "stat_validity": 0.22,
+        },
     }[pricing.tier]
 
     overrides: dict[str, dict[str, float]] = {
         # Sourced from RDAB leaderboard (1,412+ runs · 39 tasks · 12 models)
-        "gpt-4.1":                    {"correctness": 0.93, "efficiency": 0.97},
-        "gemini-2.5-flash":           {"efficiency": 0.95},
-        "llama-3.3-70b-versatile":    {"correctness": 0.82, "code_quality": 0.78},
-        "claude-sonnet-4-6":          {"correctness": 0.90, "efficiency": 0.65},
-        "claude-haiku-4-5-20251001":  {},  # economy tier base (0.88) correctly reflects token efficiency
-        "grok-3-mini":                {"code_quality": 0.50},  # sklearn blind spot confirmed in RDAB
+        "gpt-4.1": {"correctness": 0.93, "efficiency": 0.97},
+        "gemini-2.5-flash": {"efficiency": 0.95},
+        "llama-3.3-70b-versatile": {"correctness": 0.82, "code_quality": 0.78},
+        "claude-sonnet-4-6": {"correctness": 0.90, "efficiency": 0.65},
+        "claude-haiku-4-5-20251001": {},  # economy tier base (0.88) correctly reflects token efficiency
+        "grok-3-mini": {"code_quality": 0.50},  # sklearn blind spot confirmed in RDAB
     }
     for key, vals in overrides.get(pricing.model_id, {}).items():
         base[key] = vals
@@ -385,17 +397,17 @@ def _simulate_scorecard(
     def _jitter(v: float, scale: float = 0.07) -> float:
         return max(0.0, min(1.0, v + (rng - 0.5) * scale))
 
-    correctness   = _jitter(base["correctness"])
-    code_quality  = _jitter(base["code_quality"])
-    efficiency    = _jitter(base["efficiency"])
+    correctness = _jitter(base["correctness"])
+    code_quality = _jitter(base["code_quality"])
+    efficiency = _jitter(base["efficiency"])
     stat_validity = _jitter(base["stat_validity"], scale=0.06)
 
     weights = {"correctness": 0.50, "code_quality": 0.20, "efficiency": 0.15, "stat_validity": 0.15}
     rdab_score = (
-        correctness   * weights["correctness"] +
-        code_quality  * weights["code_quality"] +
-        efficiency    * weights["efficiency"] +
-        stat_validity * weights["stat_validity"]
+        correctness * weights["correctness"]
+        + code_quality * weights["code_quality"]
+        + efficiency * weights["efficiency"]
+        + stat_validity * weights["stat_validity"]
     )
 
     base_lat = {"premium": 1400, "balanced": 700, "economy": 380}[pricing.tier]
@@ -415,6 +427,7 @@ def _simulate_scorecard(
 
 
 # ─── Confidence scoring ──────────────────────────────────────────────────────
+
 
 def _compute_confidence(
     scorecard: RDABScoreCard,
@@ -450,9 +463,7 @@ def _compute_confidence(
     score = round(score * 20) / 20
 
     parts = [mode_note]
-    if num_questions >= 8:
-        parts.append(f"{num_questions} questions")
-    elif num_questions >= 5:
+    if num_questions >= 8 or num_questions >= 5:
         parts.append(f"{num_questions} questions")
     else:
         parts.append(f"{num_questions} questions — add more for higher confidence")
@@ -465,6 +476,7 @@ def _compute_confidence(
 
 
 # ─── Per-model evaluation ─────────────────────────────────────────────────────
+
 
 async def _evaluate_model(
     pricing: ModelPricing,
@@ -512,11 +524,17 @@ async def _evaluate_model(
             logger.warning(
                 f"[RDAB live] {pricing.model_id} failed ({exc}), falling back to simulation"
             )
-            rdab_scorecard, latency_ms = _simulate_scorecard(pricing, dataset_fingerprint=dataset_fingerprint)
+            rdab_scorecard, latency_ms = _simulate_scorecard(
+                pricing, dataset_fingerprint=dataset_fingerprint
+            )
     else:
-        reason = "RDAB not installed" if not RDAB_AVAILABLE else f"no API key for '{pricing.provider}'"
+        reason = (
+            "RDAB not installed" if not RDAB_AVAILABLE else f"no API key for '{pricing.provider}'"
+        )
         logger.info(f"[RDAB sim] {pricing.model_id} ({reason})")
-        rdab_scorecard, latency_ms = _simulate_scorecard(pricing, dataset_fingerprint=dataset_fingerprint)
+        rdab_scorecard, latency_ms = _simulate_scorecard(
+            pricing, dataset_fingerprint=dataset_fingerprint
+        )
 
     confidence, conf_explanation = _compute_confidence(
         rdab_scorecard, len(questions), is_live=not rdab_scorecard.simulated
@@ -532,9 +550,9 @@ async def _evaluate_model(
         "estimated_cost_per_run_usd": round(total_cost, 6),
         "rdab_score": rdab_scorecard.rdab_score,
         "scores": {
-            "correctness":  rdab_scorecard.correctness,
+            "correctness": rdab_scorecard.correctness,
             "code_quality": rdab_scorecard.code_quality,
-            "efficiency":   rdab_scorecard.efficiency,
+            "efficiency": rdab_scorecard.efficiency,
             "stat_validity": rdab_scorecard.stat_validity,
         },
     }
@@ -562,6 +580,7 @@ async def _evaluate_model(
 
 
 # ─── Main orchestrator ────────────────────────────────────────────────────────
+
 
 async def run_evaluation(
     file_content: bytes,
@@ -634,27 +653,34 @@ async def run_evaluation(
 
     # Fingerprint the dataset so simulation scores vary per upload
     import hashlib as _hl
-    _fp_str = f"{stats.rows}:{stats.columns}:{stats.missing_pct:.1f}:{','.join(stats.column_names[:8])}"
-    dataset_fingerprint = int(_hl.md5(_fp_str.encode()).hexdigest(), 16)
+
+    _fp_str = (
+        f"{stats.rows}:{stats.columns}:{stats.missing_pct:.1f}:{','.join(stats.column_names[:8])}"
+    )
+    dataset_fingerprint = int(_hl.md5(_fp_str.encode(), usedforsecurity=False).hexdigest(), 16)
 
     sem = asyncio.Semaphore(settings.eval_concurrency)
 
     async def bounded_eval(pricing: ModelPricing) -> ModelResult:
         async with sem:
             return await _evaluate_model(
-                pricing, task_dict, sample_df, questions, live_providers, merged_env,
+                pricing,
+                task_dict,
+                sample_df,
+                questions,
+                live_providers,
+                merged_env,
                 dataset_fingerprint=dataset_fingerprint,
             )
 
-    results: list[ModelResult] = await asyncio.gather(
-        *[bounded_eval(m) for m in all_models]
-    )
+    results: list[ModelResult] = await asyncio.gather(*[bounded_eval(m) for m in all_models])
 
     # ── Step 6: Rank and recommend ────────────────────────────────────────────
     max_cost = max((r.estimated_total_cost_usd for r in results), default=1.0) or 1.0
 
     def composite_score(r: ModelResult) -> float:
         import math
+
         # Use log-scale cost normalisation so 10x-cheaper models don't
         # automatically dominate over models with meaningfully better RDAB scores.
         # rdab_score 75% + log_cost_score 25%.
