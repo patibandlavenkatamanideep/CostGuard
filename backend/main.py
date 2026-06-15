@@ -11,10 +11,11 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from backend.auth import require_api_key
 from backend.config import get_settings
 from backend.logger import configure_logging, logger
 from backend.metrics import PrometheusMiddleware, metrics_endpoint, setup_otel
@@ -38,6 +39,21 @@ configure_logging(settings.log_level)
 async def lifespan(app: FastAPI):
     logger.info(f"CostGuard API starting (env={settings.app_env}, version=0.2.0)")
     logger.info(f"Configured providers: {settings.available_providers or ['none — demo mode']}")
+
+    # Auth policy guard — refuse to start an unauthenticated public instance.
+    if not settings.costguard_api_key:
+        if settings.app_env == "production" and not settings.costguard_allow_unauthenticated:
+            raise RuntimeError(
+                "COSTGUARD_API_KEY is not set. Refusing to start in production: "
+                "the proxy/evaluate/replay routes would be an open relay against your "
+                "provider keys. Set COSTGUARD_API_KEY, or set "
+                "COSTGUARD_ALLOW_UNAUTHENTICATED=true to run an intentionally public "
+                "(e.g. read-only demo) instance."
+            )
+        logger.warning(
+            "Running WITHOUT API-key auth — all routes are open. "
+            "Acceptable only for local development or an intentional public demo."
+        )
 
     # Ensure SQLite DB is initialised at startup
     try:
@@ -133,11 +149,15 @@ async def generic_error_handler(request: Request, exc: Exception) -> JSONRespons
 
 from backend.proxy import router as proxy_router  # noqa: E402
 
-app.include_router(proxy_router)
+app.include_router(proxy_router, dependencies=[Depends(require_api_key)])
 
 from backend.replay import router as replay_router  # noqa: E402
 
-app.include_router(replay_router)
+app.include_router(replay_router, dependencies=[Depends(require_api_key)])
+
+from backend.openai_compat import router as openai_router  # noqa: E402
+
+app.include_router(openai_router, dependencies=[Depends(require_api_key)])
 
 
 # ─── Routes ──────────────────────────────────────────────────────────────────
@@ -201,6 +221,7 @@ async def health_check() -> HealthResponse:
     tags=["Evaluation"],
     summary="Upload a dataset and get LLM recommendations",
     response_description="Model recommendations with cost estimates",
+    dependencies=[Depends(require_api_key)],
 )
 async def evaluate_dataset(
     file: Annotated[UploadFile, File(description="CSV or Parquet file to evaluate")],
@@ -297,12 +318,15 @@ async def evaluate_dataset(
     "/models",
     tags=["Models"],
     summary="List all supported LLM models and their pricing",
+    dependencies=[Depends(require_api_key)],
 )
 async def list_models() -> dict:
     """Return the full model catalogue with pricing information."""
-    from evaluation.pricing import MODELS
+    from evaluation.pricing import MODELS, PRICING_AS_OF, pricing_age_days
 
     return {
+        "pricing_as_of": PRICING_AS_OF,
+        "pricing_age_days": pricing_age_days(),
         "models": [
             {
                 "model_id": m.model_id,

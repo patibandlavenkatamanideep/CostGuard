@@ -16,6 +16,11 @@ _PROJECT_ROOT = str(Path(__file__).parent.parent)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
+# NOTE: this dashboard calls the evaluation engine in-process and reads the
+# observability DB directly — it does NOT go through the authenticated HTTP API.
+# It is therefore an admin-only surface with no auth of its own; do not expose it
+# publicly except as a simulation-mode demo. See SECURITY.md ("The Streamlit
+# dashboard is admin-only").
 from backend.models import EvalResponse, SessionKeys  # noqa: E402
 from evaluation.engine import run_evaluation  # noqa: E402
 from evaluation.observability import (  # noqa: E402

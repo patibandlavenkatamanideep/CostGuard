@@ -1,6 +1,6 @@
 # CostGuard
 
-> **Open-source LLM evaluation proxy.** Unlike LiteLLM, Helicone, or Portkey, CostGuard's reliability layer is grounded in [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) — 1,412+ empirical runs across 39 tasks and 12 models. You get RDAB-calibrated validity scoring on every proxy call, plus retries, circuit breakers, cost tracking, and alerting.
+> **Open-source LLM evaluation proxy.** Unlike LiteLLM, Helicone, or Portkey, CostGuard's reliability layer is grounded in [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) — 1,412+ empirical runs across 39 tasks and 12 models. You get a fast validity pre-filter on every proxy call (a keyword heuristic inspired by RDAB findings) plus full RDAB-grounded benchmarking via `/evaluate`, on top of retries, circuit breakers, cost tracking, and alerting.
 >
 > CostGuard is the runtime layer of [The Evaluation Stack](https://github.com/patibandlavenkatamanideep/RealDataAgentBench): [RDAB](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) (benchmark methodology) → CostGuard (runtime enforcement) → [Tether](https://github.com/patibandlavenkatamanideep/Tether) (trace capture). See [How This Fits With RDAB and Tether](#how-this-fits-with-rdab-and-tether) for the full architecture.
 
@@ -18,13 +18,13 @@
 
 ## What Is CostGuard?
 
-**RDAB-calibrated validity scoring on every proxy call** — that's the differentiator. Most LLM proxies gate on latency and error codes. CostGuard gates on response quality using [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) empirical data: 1,412+ runs across 39 tasks and 12 frontier models.
+**Validity-aware proxying, grounded in [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)** — that's the differentiator. Most LLM proxies gate on latency and error codes. CostGuard adds a response-quality signal: a fast lexical pre-filter on every `/proxy` call (inspired by RDAB findings — catches gross failures like empty/error/refusal output) and full RDAB benchmarking via `/evaluate`, backed by 1,412+ runs across 39 tasks and 12 frontier models.
 
 CostGuard is a self-hostable LLM proxy with two headline capabilities: `/proxy` — a fast reliability filter in your hot path (~1ms validity overhead) — and `/evaluate` — full RDAB dataset benchmarking that returns four-dimensional scorecards and cost-weighted model rankings. Add `/replay` to close the loop: replay captured Tether production traces against any alternate model and get a 95% bootstrap CI on the quality delta.
 
-- **Dataset benchmarking** — powered by [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench). Upload any CSV/Parquet and get a cost-weighted model ranking grounded in real benchmark data. The key RDAB finding: every frontier model scores ≤0.25 on statistical validity even when scoring 0.83–1.00 on correctness — correct-looking output ≠ sound reasoning.
-- **Real-time response filtering** — every `/proxy` call is scored with a RDAB-calibrated heuristic validator. Responses below your threshold are rejected automatically.
-- **Automatic fallback** — on rejection, CostGuard retries with the next model in your fallback chain.
+- **Dataset benchmarking** — powered by [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench). Upload any CSV/Parquet and get a cost-weighted model ranking grounded in real benchmark data. The key RDAB finding: a persistent statistical-validity gap — models average ~0.56 on statistical validity against an ~0.81 human-expert baseline, even while scoring 0.83–1.00 on correctness. Correct-looking output ≠ sound reasoning.
+- **Real-time response filtering** — every `/proxy` call is scored with a fast lexical pre-filter (inspired by RDAB findings). Scores are returned and logged; set `enforce: true` to reject responses below your threshold (off by default — score-and-log).
+- **Automatic fallback** — on a provider error/timeout (always) or a rejection (when `enforce: true`), CostGuard retries with the next model in your fallback chain.
 - **Exact cost tracking** — per-call token accounting at $0.000001 precision across 12 models and 5 providers.
 - **Alerting** — validity drops, cost spikes, high failure rates, circuit breaker events, and consecutive rejections routed to Slack or any webhook.
 - **Per-provider circuit breakers** — stops hammering a failing provider during an outage; state persists across restarts.
@@ -33,12 +33,51 @@ CostGuard is a self-hostable LLM proxy with two headline capabilities: `/proxy` 
 
 ---
 
+## Integrate in 5 minutes
+
+**1. Run it** (set an API key — the server refuses to start in production without one):
+
+```bash
+git clone https://github.com/patibandlavenkatamanideep/CostGuard.git && cd CostGuard
+cp .env.example .env
+echo "COSTGUARD_API_KEY=$(openssl rand -hex 32)" >> .env   # add a provider key too
+docker compose up -d
+```
+
+**2. Point the OpenAI SDK at it** — change only `base_url` and the key, nothing else:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="<COSTGUARD_API_KEY>")
+resp = client.chat.completions.create(
+    model="gpt-4.1",
+    messages=[{"role": "user", "content": "Summarize Q3 revenue trends."}],
+)
+print(resp.choices[0].message.content)
+# Validity + cost ride along in response headers: x-costguard-validity, x-costguard-cost-usd
+```
+
+Streaming works too (`stream=True`). Prefer the richer native schema? Call [`POST /proxy`](#the-proxy--http-guard-layer) instead.
+
+**3. (Optional) Prove a cheaper model is safe** — replay captured [Tether](https://github.com/patibandlavenkatamanideep/Tether) traffic against an alternate model and read the bootstrap CI:
+
+```bash
+curl -X POST http://localhost:8000/replay \
+  -H "Authorization: Bearer $COSTGUARD_API_KEY" -H "Content-Type: application/json" \
+  -d '{"tether_db_path":"/tmp/tether.db","run_id":"<uuid>","alternate_model":"gpt-4.1-mini"}'
+```
+
+A CI that straddles 0 → the cheaper model is a statistically safe swap. See [Replay Production Traces](#replay-production-traces).
+
+---
+
 ## How This Fits With RDAB and Tether
 
 CostGuard is the runtime layer of The Evaluation Stack. Each project has a distinct job:
 
 - **[RealDataAgentBench (RDAB)](https://github.com/patibandlavenkatamanideep/RealDataAgentBench)** — the benchmark methodology. 39 tasks, 4-dimensional scoring (correctness, code quality, efficiency, statistical validity), 1,412+ runs. Produces the empirical scorecards that CostGuard uses.
-- **CostGuard (this repo)** — the runtime enforcement layer. Applies RDAB-calibrated scoring in the `/proxy` hot path, runs full RDAB evaluations via `/evaluate`, and adds circuit breakers, alerting, and Prometheus observability.
+- **CostGuard (this repo)** — the runtime enforcement layer. Applies a fast lexical validity pre-filter (inspired by RDAB findings) in the `/proxy` hot path, runs full RDAB evaluations via `/evaluate`, and adds circuit breakers, alerting, and Prometheus observability.
 - **[Tether](https://github.com/patibandlavenkatamanideep/Tether)** — the trace capture layer (separate repo). Wraps OpenAI/Anthropic clients and persists every production call to SQLite. CostGuard's `POST /replay` endpoint reads those traces directly and replays them against any alternate model, returning RDAB quality deltas with a 95% bootstrap CI.
 
 ```
@@ -101,7 +140,7 @@ CostGuard has **two validity modes** — understanding the difference matters:
 
 | Mode | Endpoint | How It Works | Latency |
 |------|----------|-------------|---------|
-| **Heuristic** | `POST /proxy` | RDAB-calibrated keyword scorer (~1ms) | ~1ms overhead |
+| **Heuristic** | `POST /proxy` | Fast lexical pre-filter, inspired by RDAB (~1ms) | ~1ms overhead |
 | **Full RDAB** | `POST /evaluate` | Actual RDAB agent evaluation with dataset-grounded questions | 15s–3min |
 
 The `/proxy` endpoint uses a fast heuristic scorer: it rewards statistical markers (p-values, confidence intervals, uncertainty quantification) and penalizes failure-mode phrases ("I cannot", "I don't know", error tracebacks, empty outputs). It is **not** a full LLM evaluation — it's a practical pre-filter you can run synchronously on every call without adding meaningful latency.
@@ -158,8 +197,8 @@ Your Agent / LangGraph / CrewAI
       │         POST /proxy                  │
       │  1. Circuit breaker check            │
       │  2. LLM call (30s timeout)           │
-      │  3. Heuristic validity score (~1ms)  │
-      │  4. Reject + fallback if score < T   │
+      │  3. Lexical validity score (~1ms)    │
+      │  4. Reject + fallback if enforce & <T│
       │  5. Cost calculation                 │
       │  6. Async alert checks               │
       │  7. SQLite log (thread pool)         │
@@ -324,6 +363,8 @@ CostGuard uses [RealDataAgentBench](https://github.com/patibandlavenkatamanideep
 - **Gemini 2.5 Flash** = cheapest at $0.0015/task; only 20.6% below top score
 - **Stat validity gap**: model average 55.8% vs human expert baseline 81.3%
 
+> All RDAB figures above are sourced from the [RealDataAgentBench](https://github.com/patibandlavenkatamanideep/RealDataAgentBench) leaderboard. They reflect the RDAB `main` branch at time of writing — check the RDAB README for the current numbers before quoting them elsewhere.
+
 ### Ranking Formula
 ```
 composite = rdab_score × 0.75 + cost_score × 0.25
@@ -373,8 +414,9 @@ pip install -e .
 | Variable | Required | Notes |
 |---|---|---|
 | `SECRET_KEY` | Yes | `openssl rand -hex 32` |
+| `COSTGUARD_API_KEY` | Yes (prod) | `openssl rand -hex 32`. Required on all non-public routes; the app refuses to start in production without it. Use `COSTGUARD_ALLOW_UNAUTHENTICATED=true` instead for a public read-only demo. |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GROQ_API_KEY` | At least one for Live Mode | Omit for Simulation Mode |
-| `COSTGUARD_DB_PATH` | Recommended | Set to a persistent volume path (see per-platform notes) |
+| `COSTGUARD_DB_PATH` | Recommended | Set to a persistent volume path (see [DEPLOYMENT.md](DEPLOYMENT.md#persistence--the-writable-data-path)) |
 | `SLACK_WEBHOOK_URL` | No | Enables Slack alerting |
 | `COSTGUARD_STATE_BACKEND` | No | `sqlite` (default) or `none` |
 
@@ -387,8 +429,9 @@ Config is already in [`railway.json`](railway.json). Connect your GitHub repo in
 ```bash
 # After deploying, add secrets in Railway Dashboard → Variables
 SECRET_KEY=<openssl rand -hex 32>
+COSTGUARD_API_KEY=<openssl rand -hex 32>   # required; clients send it as Bearer
 OPENAI_API_KEY=sk-...   # at least one provider
-COSTGUARD_DB_PATH=/data/costguard_history.db
+COSTGUARD_DB_PATH=/data/costguard_history.db   # mount a Railway Volume at /data
 ```
 
 The live demo runs on Railway at [costguard-production-3afa.up.railway.app](https://costguard-production-3afa.up.railway.app/).
@@ -474,21 +517,51 @@ costguard/
 
 Full docs at `/docs` (Swagger) and `/redoc`.
 
+### Authentication
+
+All routes except `/health`, `/metrics`, and the docs pages require an API key:
+
+```
+Authorization: Bearer <COSTGUARD_API_KEY>
+```
+
+Set `COSTGUARD_API_KEY` in the environment (`openssl rand -hex 32`). In production the server **refuses to start** without it; set `COSTGUARD_ALLOW_UNAUTHENTICATED=true` only for an intentional public, read-only demo. See [SECURITY.md](SECURITY.md) for the threat model.
+
 ### POST `/proxy` — Real-time LLM guard
 ```bash
 curl -X POST http://localhost:8000/proxy \
+  -H "Authorization: Bearer $COSTGUARD_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model_id": "gpt-4.1",
     "prompt": "Analyze revenue trends",
+    "enforce": false,
     "reject_threshold": 0.30,
     "fallback_models": ["claude-sonnet-4-6"]
   }'
 ```
 
+### POST `/v1/chat/completions` — OpenAI-compatible drop-in
+Point the official OpenAI SDK at CostGuard — no client code changes beyond `base_url` and key:
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="<COSTGUARD_API_KEY>")
+resp = client.chat.completions.create(
+    model="gpt-4.1",
+    messages=[{"role": "user", "content": "Analyze revenue trends"}],
+)
+print(resp.choices[0].message.content)
+# CostGuard metadata is returned in response headers:
+#   x-costguard-validity, x-costguard-cost-usd, x-costguard-fallback-used
+```
+
+Streaming is supported (`stream=True`) and returns standard OpenAI SSE chunks; CostGuard scores and logs the assembled text after the stream completes, with validity/cost in the final chunk's `costguard` field. Streaming uses the primary model only (no mid-stream fallback).
+
 ### POST `/evaluate` — Full RDAB dataset benchmarking
 ```bash
 curl -X POST http://localhost:8000/evaluate \
+  -H "Authorization: Bearer $COSTGUARD_API_KEY" \
   -F "file=@my_data.csv" \
   -F "task_description=Analyze churn patterns"
 ```
@@ -528,7 +601,7 @@ mypy backend/ evaluation/
 ## Known Limitations
 
 - **Proxy validity scoring is heuristic-only** — the `/proxy` fast path rewards statistical keywords and penalizes failure phrases. It does not catch fluent-but-statistically-unsound responses. Use `/evaluate` for real quality assessment.
-- **`reject_threshold` is uncalibrated** — 0.30 is a reasonable default for catching broken responses; it is not empirically derived from a precision/recall curve. Calibrate to your workload before treating it as a quality gate.
+- **Validity blocking is opt-in and uncalibrated** — by default `/proxy` only scores and logs (`enforce: false`). When you set `enforce: true`, `reject_threshold` (default 0.30) gates traffic, but it is not derived from a precision/recall curve and the lexical filter can reject correct refusals ("I cannot…"). Calibrate to your workload before treating it as a quality gate.
 - **Tool-call format is not translated across providers** — CostGuard passes your prompt as-is to each provider. Fallback from Claude to GPT-4.1 or Gemini in an agent loop using function calling will produce format mismatches. `/proxy` fallback works reliably for text completion tasks only.
 - **Rate limit state is in-memory** — IP-based rate limit buckets reset on server restart. Fine for most deployments.
 - **SQLite for single-node persistence** — appropriate for self-hosted single-node deployments. Circuit breaker and alerting state survives process restarts via the `runtime_state` SQLite table. For multi-node or high-throughput deployments, migrate the state store to Redis and replace `observability.py` with PostgreSQL + asyncpg connection pool. Set `COSTGUARD_STATE_BACKEND=none` to disable persistence entirely.
@@ -539,7 +612,9 @@ mypy backend/ evaluation/
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| LLM proxy with auto-reject + fallback | ✅ Complete | `POST /proxy` — RDAB-calibrated heuristic scorer |
+| LLM proxy with opt-in reject + fallback | ✅ Complete | `POST /proxy` — fast lexical pre-filter (inspired by RDAB); `enforce` opt-in |
+| OpenAI-compatible API + streaming | ✅ Complete | `POST /v1/chat/completions` — drop-in for the OpenAI SDK; SSE streaming supported |
+| API-key authentication | ✅ Complete | Bearer token on all non-public routes; refuses to start unauthenticated in prod |
 | Per-provider circuit breaker | ✅ Complete | CLOSED/OPEN/HALF_OPEN; state persists across restarts |
 | 6 alert types with cooldown | ✅ Complete | Slack + generic webhook; cooldowns persist across restarts |
 | Tether replay (`POST /replay`) | ✅ Complete | Reads Tether SQLite, replays against alternate model, 95% bootstrap CI |

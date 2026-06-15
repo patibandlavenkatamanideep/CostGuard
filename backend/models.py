@@ -49,7 +49,14 @@ class RDABScoreCard(BaseModel):
     stat_validity: float = Field(ge=0, le=1, description="Statistical rigour (15% weight)")
     token_count: int = Field(default=0, description="Total tokens consumed")
     step_count: int = Field(default=0, description="Total agent steps taken")
-    simulated: bool = Field(default=False, description="True if no live API key was available")
+    simulated: bool = Field(
+        default=False,
+        description=(
+            "True if the score is not from a live RDAB agent evaluation — i.e. the "
+            "fast lexical pre-filter (/proxy) or simulation-mode /evaluate. False only "
+            "for real RDAB runs against live API keys."
+        ),
+    )
 
 
 class ModelResult(BaseModel):

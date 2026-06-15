@@ -24,7 +24,7 @@ from scipy import stats
 
 from backend.logger import logger
 from backend.proxy import _call_llm, _score_response_fast
-from evaluation.tether_reader import TetherStep, iter_steps_for_run
+from evaluation.tether_reader import TetherSchemaError, TetherStep, iter_steps_for_run
 
 router = APIRouter(prefix="/replay", tags=["Replay"])
 
@@ -163,6 +163,11 @@ async def replay(req: ReplayRequest) -> ReplayResponse:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot read Tether database: {exc}",
+        ) from exc
+    except TetherSchemaError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Incompatible Tether schema: {exc}",
         ) from exc
     except sqlite3.OperationalError as exc:
         raise HTTPException(

@@ -18,6 +18,63 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+# ─── Vendored Tether schema contract ──────────────────────────────────────────
+# CostGuard reads Tether's SQLite directly (no package dependency), so a Tether
+# schema change would otherwise surface as a cryptic SQL error mid-replay. We
+# pin the contract here and validate before querying. If Tether changes its
+# `steps` table, bump this and re-verify against tether/core/storage.py.
+TETHER_SCHEMA_VERSION = "0.1"
+
+# Columns iter_steps_for_run selects — the replay contract depends on every one.
+REQUIRED_STEPS_COLUMNS: frozenset[str] = frozenset(
+    {
+        "id",
+        "run_id",
+        "sequence_number",
+        "kind",
+        "model",
+        "inputs",
+        "outputs",
+        "input_tokens",
+        "output_tokens",
+        "cost_usd",
+        "latency_ms",
+        "error",
+        "created_at",
+        "completed_at",
+    }
+)
+
+
+class TetherSchemaError(Exception):
+    """Raised when a Tether database does not match the expected schema contract."""
+
+
+def validate_steps_schema(conn: sqlite3.Connection) -> None:
+    """Check the `steps` table exists and carries every column replay needs.
+
+    Raises TetherSchemaError with an actionable message when the contract is
+    broken, instead of letting a raw sqlite3.OperationalError leak from the query.
+    """
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(steps)")}
+    except sqlite3.OperationalError as exc:
+        raise TetherSchemaError(f"Cannot read Tether schema: {exc}") from exc
+
+    if not cols:
+        raise TetherSchemaError(
+            "Tether database has no `steps` table — not a Tether trace DB, or the "
+            f"schema changed (CostGuard expects Tether schema v{TETHER_SCHEMA_VERSION})."
+        )
+
+    missing = REQUIRED_STEPS_COLUMNS - cols
+    if missing:
+        raise TetherSchemaError(
+            f"Tether `steps` table is missing column(s): {sorted(missing)}. "
+            f"CostGuard expects Tether schema v{TETHER_SCHEMA_VERSION}; re-verify "
+            "evaluation/tether_reader.py against the Tether storage schema."
+        )
+
 
 @dataclass(frozen=True)
 class TetherStep:
@@ -78,6 +135,13 @@ def iter_steps_for_run(
     uri = f"file:{path.resolve()}?mode=ro"
     conn = sqlite3.connect(uri, uri=True, timeout=10)
     conn.row_factory = sqlite3.Row
+
+    # Fail fast with a clear message if Tether's schema has drifted.
+    try:
+        validate_steps_schema(conn)
+    except TetherSchemaError:
+        conn.close()
+        raise
 
     conditions = ["run_id = ?", "kind = ?"]
     params: list[str] = [run_id, kind]

@@ -5,13 +5,16 @@ Any LangGraph, CrewAI, or custom agent calls POST /proxy instead of calling
 the LLM provider directly. CostGuard:
   1. Routes to the chosen model (or picks the best one)
   2. Calls the LLM (with per-call timeout + circuit breaker check)
-  3. Scores the response with a RDAB-calibrated heuristic scorer
-  4. Rejects + retries with a fallback model if validity < threshold
-  5. Logs cost, latency, validity for every call
+  3. Scores the response with a fast lexical pre-filter (inspired by RDAB findings)
+  4. Logs cost, latency, validity for every call
+  5. Optionally (enforce=true) rejects + retries with a fallback model if validity < threshold
   6. Returns the response + full metadata
 
-Note on validity scoring: the /proxy endpoint uses a fast heuristic scorer
-(~1ms overhead). Full RDAB agent evaluation is available via POST /evaluate.
+Note on validity scoring: the /proxy endpoint uses a fast lexical pre-filter
+(~1ms overhead), NOT a full RDAB evaluation — it catches gross failures (empty,
+error, refusal responses), not subtle statistical-validity gaps. Full RDAB agent
+evaluation is available via POST /evaluate. By default the filter only scores and
+logs; set enforce=true to gate traffic on it.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -138,11 +142,19 @@ class ProxyRequest(BaseModel):
     )
     max_tokens: int = Field(default=512, ge=1, le=16384)
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
+    enforce: bool = Field(
+        default=False,
+        description=(
+            "If true, reject responses scoring below reject_threshold and retry the "
+            "fallback chain. Default false = score-and-log only (never block on validity). "
+            "WARNING: the lexical filter can reject correct refusals; calibrate before enabling."
+        ),
+    )
     reject_threshold: float = Field(
         default=0.30,
         ge=0.0,
         le=1.0,
-        description="Minimum validity score to accept a response (0–1). Default 0.30.",
+        description="Minimum validity score to accept a response (0–1) when enforce=true. Default 0.30.",
     )
     fallback_models: list[str] = Field(
         default_factory=list,
@@ -372,6 +384,173 @@ async def _call_xai(
     return text, usage.prompt_tokens if usage else 0, usage.completion_tokens if usage else 0
 
 
+# ─── Streaming LLM callers ────────────────────────────────────────────────────
+#
+# Each generator yields ("text", <delta>) for every token chunk and finally
+# ("usage", <input_tokens>, <output_tokens>). Usage may be (0, 0) if the provider
+# does not report it on the stream; callers estimate tokens from text in that case.
+
+StreamEvent = tuple
+
+
+async def _stream_llm(
+    model_id: str,
+    prompt: str,
+    system_prompt: str | None,
+    max_tokens: int,
+    temperature: float,
+    api_key: str | None,
+) -> AsyncIterator[StreamEvent]:
+    """Dispatch a streaming LLM call to the right provider. Mirrors _call_llm."""
+    from evaluation.pricing import MODELS
+
+    pricing = MODELS.get(model_id)
+    if not pricing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown model_id '{model_id}'. Check GET /models for valid IDs.",
+        )
+
+    provider = pricing.provider
+    effective_key = api_key or _get_server_key(provider)
+    if not effective_key:
+        raise HTTPException(
+            status_code=status.HTTP_424_FAILED_DEPENDENCY,
+            detail=f"No API key for provider '{provider}'. Set {provider.upper()}_API_KEY or pass api_key.",
+        )
+
+    if provider == "anthropic":
+        gen = _stream_anthropic(
+            pricing.model_id, prompt, system_prompt, max_tokens, temperature, effective_key
+        )
+    elif provider in ("openai", "groq", "xai"):
+        client = (
+            _get_groq(effective_key)
+            if provider == "groq"
+            else _get_openai(effective_key, base_url="https://api.x.ai/v1")
+            if provider == "xai"
+            else _get_openai(effective_key)
+        )
+        gen = _stream_openai_like(
+            client, pricing.model_id, prompt, system_prompt, max_tokens, temperature
+        )
+    elif provider == "google":
+        gen = _stream_gemini(
+            pricing.model_id, prompt, system_prompt, max_tokens, temperature, effective_key
+        )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Streaming not supported for provider '{provider}'.",
+        )
+
+    async for event in gen:
+        yield event
+
+
+async def _stream_openai_like(
+    client: Any,
+    model_id: str,
+    prompt: str,
+    system: str | None,
+    max_tokens: int,
+    temperature: float,
+) -> AsyncIterator[StreamEvent]:
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
+    in_tok = out_tok = 0
+    try:
+        stream = await client.chat.completions.create(
+            model=model_id,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=True,
+            stream_options={"include_usage": True},
+        )
+    except TypeError:
+        # Some OpenAI-compatible endpoints (e.g. xAI) reject stream_options.
+        stream = await client.chat.completions.create(
+            model=model_id,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=True,
+        )
+
+    async for chunk in stream:
+        if getattr(chunk, "usage", None):
+            in_tok = chunk.usage.prompt_tokens or in_tok
+            out_tok = chunk.usage.completion_tokens or out_tok
+        if chunk.choices:
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                yield ("text", delta.content)
+    yield ("usage", in_tok, out_tok)
+
+
+async def _stream_anthropic(
+    model_id: str,
+    prompt: str,
+    system: str | None,
+    max_tokens: int,
+    temperature: float,
+    key: str,
+) -> AsyncIterator[StreamEvent]:
+    client = _get_anthropic(key)
+    kwargs: dict[str, Any] = {
+        "model": model_id,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if system:
+        kwargs["system"] = system
+    async with client.messages.stream(**kwargs) as stream:
+        async for text in stream.text_stream:
+            if text:
+                yield ("text", text)
+        final = await stream.get_final_message()
+        usage = final.usage
+        yield ("usage", usage.input_tokens, usage.output_tokens)
+
+
+async def _stream_gemini(
+    model_id: str,
+    prompt: str,
+    system: str | None,
+    max_tokens: int,
+    temperature: float,
+    key: str,
+) -> AsyncIterator[StreamEvent]:
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=key)
+    config = types.GenerateContentConfig(
+        system_instruction=system or "",
+        max_output_tokens=max_tokens,
+        temperature=temperature,
+    )
+    in_tok = out_tok = 0
+    stream = await client.aio.models.generate_content_stream(
+        model=model_id,
+        contents=prompt,
+        config=config,
+    )
+    async for chunk in stream:
+        if getattr(chunk, "text", None):
+            yield ("text", chunk.text)
+        usage = getattr(chunk, "usage_metadata", None)
+        if usage:
+            in_tok = (usage.prompt_token_count or 0) or in_tok
+            out_tok = (usage.candidates_token_count or 0) or out_tok
+    yield ("usage", in_tok, out_tok)
+
+
 # ─── Retry wrapper ────────────────────────────────────────────────────────────
 
 
@@ -406,7 +585,7 @@ async def _call_llm_with_retry(
     return await _attempt()
 
 
-# ─── Heuristic validity scorer (RDAB-calibrated) ─────────────────────────────
+# ─── Fast lexical pre-filter (inspired by RDAB findings) ─────────────────────
 
 
 def _score_response_fast(
@@ -415,16 +594,23 @@ def _score_response_fast(
     context: str | None = None,
 ) -> RDABScoreCard:
     """
-    Fast heuristic validity scorer for proxy mode (~1ms overhead).
+    Fast lexical pre-filter for proxy mode (~1ms overhead).
 
-    This is NOT a full RDAB evaluation — it's a lightweight pre-filter calibrated
-    against RDAB benchmark findings. Use POST /evaluate for full RDAB benchmarking.
+    This is NOT a full RDAB evaluation and NOT calibrated — it's a keyword
+    heuristic inspired by RDAB benchmark findings. Its honest job is catching
+    gross failures (empty, error, refusal responses); it cannot detect the
+    fluent-but-statistically-unsound outputs RDAB measures. Use POST /evaluate
+    for real RDAB benchmarking.
 
-    Scoring rationale (derived from RDAB benchmark patterns):
+    Heuristic rationale:
     - stat_validity: presence of uncertainty quantification markers
-    - correctness: penalizes known failure-mode phrases
+    - correctness: penalizes known failure-mode phrases (note: this can penalize
+      correct refusals — a false-positive to be aware of when enforce=true)
     - code_quality: neutral default (cannot determine from text alone)
     - efficiency: penalizes verbose responses
+
+    `simulated=True` on the returned scorecard flags that the score is heuristic,
+    not a real RDAB agent evaluation (see RDABScoreCard.simulated).
     """
     text = response_text.strip()
 
@@ -530,9 +716,11 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
     """
     Drop-in LLM proxy for any agent or application.
 
-    Every response is scored with a RDAB-calibrated heuristic validator before
-    being returned. If validity falls below `reject_threshold`, CostGuard rejects
-    the response and retries with the next model in `fallback_models`.
+    Every response is scored with a fast lexical pre-filter (inspired by RDAB
+    findings, not calibrated) and the score is returned and logged. By default
+    the score is informational only. Set `enforce=true` to reject responses
+    below `reject_threshold` and retry the next model in `fallback_models`
+    (note: the filter can reject correct refusals — see `enforce`).
 
     For full RDAB statistical evaluation, use POST /evaluate.
 
@@ -552,7 +740,6 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
     ```
     """
     call_id = getattr(request.state, "request_id", str(uuid.uuid4())[:12])
-    time.monotonic()
 
     model_id = req.model_id if not req.auto_select else _pick_best_available_model()
     models_to_try = [model_id] + [m for m in req.fallback_models if m != model_id]
@@ -621,7 +808,27 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
                 latency_ms / 1000
             )
 
-            if score.rdab_score >= req.reject_threshold:
+            below_threshold = score.rdab_score < req.reject_threshold
+
+            # Monitoring fires on observation regardless of enforcement, so
+            # low-validity trends are visible even in score-and-log mode.
+            if below_threshold:
+                await _alert_engine.check_validity(
+                    call_id=call_id,
+                    model_id=current_model,
+                    validity_score=score.rdab_score,
+                    threshold=req.reject_threshold,
+                )
+                await _alert_engine.check_consecutive_low_validity(
+                    call_id=call_id,
+                    model_id=current_model,
+                    validity_score=score.rdab_score,
+                    threshold=req.reject_threshold,
+                )
+
+            # Blocking is opt-in. Default (enforce=false) accepts the first
+            # successful response and lets the caller inspect validity_score.
+            if not below_threshold or not req.enforce:
                 accepted = True
                 if attempt_idx > 0:
                     fallback_used = True
@@ -635,19 +842,6 @@ async def proxy_call(req: ProxyRequest, request: Request) -> ProxyResponse:
                 )
                 proxy_rejections_total.labels(model=current_model, reason="low_validity").inc()
                 logger.warning(f"[{call_id}] Rejected {current_model}: {rejection_reason}")
-
-                await _alert_engine.check_validity(
-                    call_id=call_id,
-                    model_id=current_model,
-                    validity_score=score.rdab_score,
-                    threshold=req.reject_threshold,
-                )
-                await _alert_engine.check_consecutive_low_validity(
-                    call_id=call_id,
-                    model_id=current_model,
-                    validity_score=score.rdab_score,
-                    threshold=req.reject_threshold,
-                )
 
         except TimeoutError:
             cb.record_failure()

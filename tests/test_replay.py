@@ -15,7 +15,13 @@ from fastapi.testclient import TestClient
 
 from backend.main import app
 from backend.replay import _bootstrap_ci
-from evaluation.tether_reader import TetherStep, iter_steps_for_run
+from evaluation.tether_reader import (
+    REQUIRED_STEPS_COLUMNS,
+    TetherSchemaError,
+    TetherStep,
+    iter_steps_for_run,
+    validate_steps_schema,
+)
 
 client = TestClient(app)
 
@@ -410,3 +416,70 @@ class TestReplayCostCalculation:
             assert abs(body["savings_per_call_usd"] - expected) < 1e-9
         finally:
             Path(db_path).unlink(missing_ok=True)
+
+
+# ─── Tether schema contract ───────────────────────────────────────────────────
+
+
+class TestSchemaContract:
+    """Guards the vendored Tether schema contract so an upstream schema change
+    surfaces as a clear error instead of a cryptic SQL failure mid-replay."""
+
+    def test_valid_schema_passes(self):
+        conn = sqlite3.connect(":memory:")
+        conn.executescript(_SCHEMA)
+        validate_steps_schema(conn)  # should not raise
+        conn.close()
+
+    def test_missing_steps_table_raises(self):
+        conn = sqlite3.connect(":memory:")  # no tables at all
+        with pytest.raises(TetherSchemaError, match="no `steps` table"):
+            validate_steps_schema(conn)
+        conn.close()
+
+    def test_missing_column_raises(self):
+        conn = sqlite3.connect(":memory:")
+        # steps table missing the cost_usd column that replay depends on.
+        conn.executescript(
+            """
+            CREATE TABLE steps (
+                id TEXT PRIMARY KEY, run_id TEXT, sequence_number INTEGER,
+                kind TEXT, model TEXT, inputs TEXT, outputs TEXT,
+                input_tokens INTEGER, output_tokens INTEGER,
+                latency_ms REAL, error TEXT, created_at TEXT, completed_at TEXT
+            );
+            """
+        )
+        with pytest.raises(TetherSchemaError, match="cost_usd"):
+            validate_steps_schema(conn)
+        conn.close()
+
+    def test_required_columns_match_select(self):
+        # The contract set must contain the ordering and payload columns replay reads.
+        for col in ("run_id", "kind", "sequence_number", "inputs", "outputs", "cost_usd"):
+            assert col in REQUIRED_STEPS_COLUMNS
+
+    def test_replay_endpoint_returns_400_on_bad_schema(self):
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            path = f.name
+        try:
+            conn = sqlite3.connect(path)
+            # Wrong schema: steps table missing required columns.
+            conn.executescript(
+                "CREATE TABLE steps (id TEXT, run_id TEXT, sequence_number INTEGER, kind TEXT);"
+            )
+            conn.commit()
+            conn.close()
+
+            resp = client.post(
+                "/replay",
+                json={
+                    "tether_db_path": path,
+                    "run_id": "run-1",
+                    "alternate_model": "gpt-4.1",
+                },
+            )
+            assert resp.status_code == 400
+            assert "Incompatible Tether schema" in resp.json()["detail"]
+        finally:
+            Path(path).unlink(missing_ok=True)
